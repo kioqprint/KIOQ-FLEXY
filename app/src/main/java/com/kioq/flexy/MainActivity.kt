@@ -6,6 +6,13 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.storage.FirebaseStorage
+import android.text.TextWatcher
+import android.text.Editable
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import android.animation.ObjectAnimator
 import android.view.animation.LinearInterpolator
 import android.app.AlertDialog
@@ -43,6 +50,14 @@ class MainActivity : Activity() {
     private var imageStripContent: LinearLayout? = null
     private var autoScroll = false
     private var isAdmin = false
+    private var cloudSettingsLoaded = false
+    private var imageCaptions = mutableListOf<String>()
+    private var shopName = "KIOQ.STORE"
+    private var shopDescription = "فضاء موحد لتسهيل الوصول إلى منصات الخدمات."
+    private var shopMobilis = "0699761222"
+    private var shopOoredoo = "0555552711"
+    private var shopEmail = "kioq.store@gmail.com"
+    private var shopUrl = ""
     private var customerName = ""
     private var customerPhone = ""
     private val auth by lazy { FirebaseAuth.getInstance() }
@@ -216,6 +231,7 @@ class MainActivity : Activity() {
     }
 
     private fun showHome() {
+        if (!cloudSettingsLoaded && auth.currentUser != null) loadCloudSettings()
         webView?.destroy(); webView = null
         autoScroll = false
         val frame = FrameLayout(this).apply { setBackgroundColor(0xFFF2F6FF.toInt()) }
@@ -227,11 +243,11 @@ class MainActivity : Activity() {
         val top = row()
         top.addView(button("ⓘ", { showInfo() }), params(dp(40), dp(40)))
         top.addView(button(if (french) "ع" else "FR", { french = !french; showHome() }), params(dp(44), dp(40)))
-        top.addView(button("♧", { showMessage(if (french) "Aucune nouvelle notification" else "لا توجد تنبيهات جديدة") }), params(dp(40), dp(40)))
+        top.addView(button("♧", { showNotifications() }), params(dp(40), dp(40)))
         top.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f))
         val brand = column().apply { gravity = Gravity.CENTER }
         brand.addView(label("kioq flexy", 21f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
-        brand.addView(label("KIOQ.STORE", 10f, 0xFF526783.toInt(), true).apply { gravity = Gravity.CENTER })
+        brand.addView(label(shopName, 10f, 0xFF526783.toInt(), true).apply { gravity = Gravity.CENTER })
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(button("☰", { openDrawer(frame) }), params(dp(44), dp(42)))
         page.addView(top)
@@ -286,7 +302,7 @@ class MainActivity : Activity() {
             page.addView(label("لا توجد منصات ظاهرة حالياً", 13f, 0xFF526783.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(20), 0, dp(20)) })
         }
 
-        val store = button("⌂   KIOQ.STORE", { showMessage(if (french) "Lien de la boutique à configurer" else "رابط المتجر سيضاف من إعدادات الإدارة") }, true)
+        val store = button("⌂   " + shopName, { if (shopUrl.isNotBlank()) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(shopUrl))) else showMessage("رابط المتجر غير محدد بعد") }, true)
         val stlp = params(-1, dp(48)); stlp.topMargin = dp(18); page.addView(store, stlp)
 
         val footer = row().apply { gravity = Gravity.CENTER }
@@ -345,7 +361,7 @@ class MainActivity : Activity() {
             val card = column().apply { background = shape(0xFFEAF2FF.toInt(), 16); gravity = Gravity.CENTER }
             val img = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
             card.addView(img, params(dp(260), dp(100)))
-            val caption = prefs.getString("caption_$index", "") ?: ""
+            val caption = imageCaptions.getOrNull(index) ?: (prefs.getString("caption_" + index, "") ?: "")
             if (caption.isNotBlank()) card.addView(label(caption, 12f, 0xFF24344B.toInt()).apply { gravity = Gravity.CENTER; setPadding(dp(8), dp(4), dp(8), dp(4)) })
             content.addView(card, LinearLayout.LayoutParams(dp(260), -2).apply { marginEnd = dp(10) })
             if (uriText.startsWith("content://")) {
@@ -444,13 +460,13 @@ class MainActivity : Activity() {
         panel.addView(label("KIOQ.STORE", 11f, 0xFF526783.toInt()))
         panel.addView(View(this).apply { setBackgroundColor(0xFFE8EEEE.toInt()) }, params(-1, dp(1)))
         val items = mutableListOf<Pair<String, () -> Unit>>()
-        items.add("معلومات الحساب" to { showMessage("حساب KIOQ.STORE") })
+        items.add("معلومات الحساب" to { showAccountInfo() })
         if (isAdmin) {
-            items.add("زبائني" to { showMessage("إدارة الزبائن تحتاج استكمال ربط قاعدة البيانات.") })
-            items.add("الإعدادات" to { showAdminPanel() })
+            items.add("لوحة الإدارة" to { showAdminDashboard() })
+            items.add("زبائني" to { showCustomers() })
         }
         items.add("المنصات" to { showHome() })
-        items.add("التنبيهات" to { showMessage("لا توجد تنبيهات جديدة") })
+        items.add("التنبيهات" to { showNotifications() })
         items.add("التنزيلات والتحديثات" to { showMessage("نسخة التطبيق الحالية 1.0.0") })
         items.add("وسائل الاتصال" to { showContacts() })
         items.add("تسجيل الخروج" to { logout() })
@@ -474,69 +490,71 @@ class MainActivity : Activity() {
     }
 
     private fun showInfo() {
-        AlertDialog.Builder(this).setTitle("عن KIOQ.STORE")
-            .setMessage("فضاء موحد لتسهيل الوصول إلى منصات الخدمات ومتابعة الحسابات. يمكن للإدارة تعديل معلومات المحل ووسائل التواصل لاحقاً.")
+        AlertDialog.Builder(this).setTitle("عن " + shopName)
+            .setMessage(shopDescription)
             .setPositiveButton("حسناً", null).show()
     }
 
-    private fun showAdminPanel() {
-        if (!isAdmin) { showMessage("هذه الخاصية متاحة للإدارة فقط"); return }
-        val options = arrayOf("الشريط الكتابي والسرعة", "صور البانر", "إدارة ظهور المنصات", "قائمة الزبائن")
-        AlertDialog.Builder(this).setTitle("إعدادات الإدارة")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> editTickerAndSpeed()
-                    1 -> editImages()
-                    2 -> editPlatformVisibility()
-                    3 -> showMessage("قائمة الزبائن غير مفعّلة بعد.")
-                }
-            }.show()
-    }
+    private fun showAdminPanel() = showAdminDashboard()
 
 
     private fun showContacts() {
-        val choices = arrayOf("اتصال موبيليس 0699761222", "اتصال أوريدو 0555552711", "واتساب موبيليس", "واتساب أوريدو", "البريد الإلكتروني kioq.store@gmail.com")
+        val choices = arrayOf("اتصال موبيليس " + shopMobilis, "اتصال أوريدو " + shopOoredoo, "واتساب موبيليس", "واتساب أوريدو", "البريد الإلكتروني " + shopEmail)
         AlertDialog.Builder(this).setTitle("وسائل الاتصال").setItems(choices) { _, which ->
             when (which) {
-                0 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0699761222")))
-                1 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0555552711")))
-                2 -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/213699761222")))
-                3 -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/213555552711")))
-                4 -> startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:kioq.store@gmail.com")))
+                0 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + shopMobilis)))
+                1 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + shopOoredoo)))
+                2 -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + whatsappNumber(shopMobilis))))
+                3 -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + whatsappNumber(shopOoredoo))))
+                4 -> startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + shopEmail)))
             }
         }.setNegativeButton("إغلاق", null).show()
     }
 
     private fun editTickerAndSpeed() {
-        val input = EditText(this).apply { setText(tickerText); hint = "النص المتحرك" }
+        if (!requireAdmin()) return
+        val input = EditText(this).apply { setText(tickerText); hint = "النص المتحرك"; setSingleLine(false) }
         val seek = SeekBar(this).apply { max = 90; progress = tickerSpeed }
-        val box = column().apply { setPadding(dp(16), dp(8), dp(16), dp(8)); addView(input); addView(label("السرعة", 13f)); addView(seek) }
+        val box = column().apply { setPadding(dp(16), dp(8), dp(16), dp(8)); addView(input, params(-1, dp(58))); addView(label("السرعة", 13f)); addView(seek) }
         AlertDialog.Builder(this).setTitle("الشريط الكتابي والسرعة").setView(box)
-            .setPositiveButton("حفظ") { _, _ ->
-                tickerText = input.text.toString()
-                tickerSpeed = seek.progress.coerceIn(10, 90)
-                prefs.edit().putString("ticker", tickerText).putInt("speed", tickerSpeed).apply()
-                tickerView?.text = tickerText
-                tickerView?.let { tv -> (tv.parent as? FrameLayout)?.let { startTickerAnimation(it, tv) } }
-                startBannerScroll()
-            }.setNegativeButton("إلغاء", null).show()
+            .setPositiveButton("حفظ", null).setNegativeButton("إلغاء", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val newText = input.text.toString().trim()
+                        val newSpeed = seek.progress.coerceIn(10, 90)
+                        if (newText.isBlank()) { input.error = "اكتب نص الشريط"; return@setOnClickListener }
+                        saveCloudSettings(mapOf("ticker" to newText, "tickerSpeed" to newSpeed)) {
+                            tickerText = newText; tickerSpeed = newSpeed
+                            prefs.edit().putString("ticker", tickerText).putInt("speed", tickerSpeed).apply()
+                            tickerView?.text = tickerText
+                            tickerView?.let { tv -> (tv.parent as? FrameLayout)?.let { startTickerAnimation(it, tv) } }
+                            startBannerScroll(); dialog.dismiss()
+                        }
+                    }
+                }
+                dialog.show()
+            }
     }
 
     private fun editPlatformVisibility() {
-        if (!isAdmin) { showMessage("هذه الخاصية متاحة للإدارة فقط"); return }
+        if (!requireAdmin()) return
         val names = platforms.map { it.name }.toTypedArray()
-        val checked = BooleanArray(platforms.size) { i -> prefs.getBoolean("platform_visible_${platforms[i].name}", true) }
-        AlertDialog.Builder(this)
-            .setTitle("إظهار أو إخفاء المنصات")
+        val checked = BooleanArray(platforms.size) { i -> prefs.getBoolean("platform_visible_" + platforms[i].name, true) }
+        AlertDialog.Builder(this).setTitle("إظهار أو إخفاء المنصات")
             .setMultiChoiceItems(names, checked) { _, which, isChecked -> checked[which] = isChecked }
-            .setPositiveButton("حفظ") { _, _ ->
-                val edit = prefs.edit()
-                platforms.forEachIndexed { i, p -> edit.putBoolean("platform_visible_${p.name}", checked[i]) }
-                edit.apply()
-                showHome()
+            .setPositiveButton("حفظ", null).setNegativeButton("إلغاء", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val visibility = HashMap<String, Boolean>()
+                        platforms.forEachIndexed { i, p -> visibility[p.name] = checked[i] }
+                        saveCloudSettings(mapOf("platformVisibility" to visibility)) {
+                            platforms.forEach { p -> prefs.edit().putBoolean("platform_visible_" + p.name, visibility[p.name] ?: true).apply() }
+                            dialog.dismiss(); showHome()
+                        }
+                    }
+                }
+                dialog.show()
             }
-            .setNegativeButton("إلغاء", null)
-            .show()
     }
 
     private fun editTicker() {
@@ -564,9 +582,20 @@ class MainActivity : Activity() {
     }
 
     private fun editImages() {
+        if (!requireAdmin()) return
+        val options = arrayOf("إضافة صور من الهاتف", "تعديل أوصاف الصور", "حذف صورة")
+        AlertDialog.Builder(this).setTitle("إدارة صور البانر").setItems(options) { _, which ->
+            when (which) {
+                0 -> pickBannerImages()
+                1 -> if (imageUrls.isEmpty()) showMessage("لا توجد صور حالياً") else editBannerCaptions()
+                2 -> deleteBannerImage()
+            }
+        }.show()
+    }
+
+    private fun pickBannerImages() {
         val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/*"
+            addCategory(Intent.CATEGORY_OPENABLE); type = "image/*"
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
@@ -580,29 +609,366 @@ class MainActivity : Activity() {
         val selected = mutableListOf<Uri>()
         data.clipData?.let { clip -> for (i in 0 until clip.itemCount) selected.add(clip.getItemAt(i).uri) }
         if (selected.isEmpty()) data.data?.let { selected.add(it) }
-        selected.forEach { uri ->
-            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { }
-            imageUrls.add(uri.toString())
-        }
-        imageUrls = imageUrls.distinct().toMutableList()
-        prefs.edit().putString("images", imageUrls.joinToString("\n")).apply()
-        editBannerCaptions()
+        selected.forEach { uri -> try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { } }
+        uploadBannerUris(selected)
     }
 
     private fun editBannerCaptions() {
+        if (!requireAdmin()) return
         val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
         val fields = imageUrls.mapIndexed { index, _ ->
-            val input = EditText(this).apply { hint = "النص أسفل الصورة " + (index + 1); setText(prefs.getString("caption_" + index, "")) }
+            val input = EditText(this).apply { hint = "النص أسفل الصورة " + (index + 1); setText(imageCaptions.getOrNull(index) ?: "") }
             box.addView(label("الصورة " + (index + 1), 13f, 0xFF1769D2.toInt(), true))
-            box.addView(input, params(-1, dp(48)))
-            index to input
+            box.addView(input, params(-1, dp(48))); index to input
         }
-        AlertDialog.Builder(this).setTitle("وصف صور البانر").setView(box)
+        AlertDialog.Builder(this).setTitle("وصف صور البانر").setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("حفظ", null).setNegativeButton("إلغاء", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        imageCaptions = MutableList(imageUrls.size) { index -> fields.firstOrNull { it.first == index }?.second?.text?.toString()?.trim() ?: "" }
+                        saveBannersToCloud { dialog.dismiss(); renderImageBanners(); showMessage("تم حفظ الصور والأوصاف") }
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+
+    private fun requireAdmin(): Boolean {
+        val allowed = auth.currentUser?.email.equals("kioq.store@gmail.com", true)
+        if (!allowed) showMessage("هذه الخاصية متاحة لحساب الإدارة فقط")
+        return allowed
+    }
+
+    private fun saveCloudSettings(values: Map<String, Any>, onSuccess: () -> Unit) {
+        if (!requireAdmin()) return
+        db.collection("app_config").document("main").set(values, SetOptions.merge())
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { error ->
+                showMessage("تعذر حفظ الإعدادات في قاعدة البيانات: " + (error.localizedMessage ?: "تحقق من صلاحيات الإدارة وقواعد Firebase"))
+            }
+    }
+
+    private fun loadCloudSettings() {
+        if (cloudSettingsLoaded) return
+        db.collection("app_config").document("main").get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    tickerText = doc.getString("ticker") ?: tickerText
+                    tickerSpeed = (doc.getLong("tickerSpeed") ?: tickerSpeed.toLong()).toInt().coerceIn(10, 90)
+                    val visibility = doc.get("platformVisibility") as? Map<*, *>
+                    visibility?.forEach { (key, value) ->
+                        if (key is String && value is Boolean) prefs.edit().putBoolean("platform_visible_" + key, value).apply()
+                    }
+                    val banners = doc.get("banners") as? List<*>
+                    if (banners != null) {
+                        imageUrls.clear(); imageCaptions.clear()
+                        banners.forEach { item ->
+                            val entry = item as? Map<*, *>
+                            val url = entry?.get("url") as? String
+                            if (!url.isNullOrBlank()) {
+                                imageUrls.add(url)
+                                imageCaptions.add(entry["caption"] as? String ?: "")
+                            }
+                        }
+                    }
+                    shopName = doc.getString("shopName") ?: shopName
+                    shopDescription = doc.getString("shopDescription") ?: shopDescription
+                    shopMobilis = doc.getString("shopMobilis") ?: shopMobilis
+                    shopOoredoo = doc.getString("shopOoredoo") ?: shopOoredoo
+                    shopEmail = doc.getString("shopEmail") ?: shopEmail
+                    shopUrl = doc.getString("shopUrl") ?: shopUrl
+                    prefs.edit().putString("ticker", tickerText).putInt("speed", tickerSpeed)
+                        .putString("images", imageUrls.joinToString("\n")).apply()
+                }
+                cloudSettingsLoaded = true
+                showHome()
+            }
+            .addOnFailureListener {
+                cloudSettingsLoaded = true
+                showHome()
+                showMessage("تعذر تحميل إعدادات المحل من قاعدة البيانات. تحقق من قواعد Firestore.")
+            }
+    }
+
+    private fun saveBannersToCloud(onSuccess: () -> Unit) {
+        val banners = imageUrls.mapIndexed { index, url ->
+            hashMapOf<String, Any>("url" to url, "caption" to (imageCaptions.getOrNull(index) ?: ""))
+        }
+        saveCloudSettings(mapOf("banners" to banners)) {
+            prefs.edit().putString("images", imageUrls.joinToString("\n")).apply()
+            imageCaptions.forEachIndexed { index, caption -> prefs.edit().putString("caption_" + index, caption).apply() }
+            onSuccess()
+        }
+    }
+
+    private fun uploadBannerUris(uris: List<Uri>) {
+        if (!requireAdmin()) return
+        if (uris.isEmpty()) return
+        val uploaded = mutableListOf<String>()
+        var completed = 0
+        var failed = false
+        uris.forEachIndexed { index, uri ->
+            val ref = FirebaseStorage.getInstance().reference.child("banners/" + System.currentTimeMillis() + "_" + index + ".jpg")
+            ref.putFile(uri).continueWithTask { task ->
+                if (!task.isSuccessful) throw (task.exception ?: Exception("Upload failed"))
+                ref.downloadUrl
+            }.addOnSuccessListener { downloadUri ->
+                if (failed) return@addOnSuccessListener
+                uploaded.add(downloadUri.toString())
+                completed++
+                if (completed == uris.size) {
+                    imageUrls.addAll(uploaded)
+                    imageCaptions.addAll(List(uploaded.size) { "" })
+                    saveBannersToCloud {
+                        renderImageBanners()
+                        showMessage("تم رفع الصور وحفظها بنجاح")
+                        editBannerCaptions()
+                    }
+                }
+            }.addOnFailureListener { error ->
+                failed = true
+                showMessage("تعذر رفع إحدى الصور: " + (error.localizedMessage ?: "تحقق من قواعد Firebase Storage"))
+            }
+        }
+    }
+
+    private fun deleteBannerImage() {
+        if (imageUrls.isEmpty()) { showMessage("لا توجد صور لحذفها"); return }
+        val names = imageUrls.indices.map { "الصورة " + (it + 1) + " — " + (imageCaptions.getOrNull(it) ?: "") }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("اختر الصورة للحذف").setItems(names) { _, which ->
+            AlertDialog.Builder(this).setTitle("تأكيد الحذف").setMessage("هل تريد إزالة هذه الصورة من واجهة التطبيق؟")
+                .setPositiveButton("حذف") { _, _ ->
+                    imageUrls.removeAt(which)
+                    if (which < imageCaptions.size) imageCaptions.removeAt(which)
+                    saveBannersToCloud { renderImageBanners(); showMessage("تم حذف الصورة من العرض") }
+                }.setNegativeButton("إلغاء", null).show()
+        }.setNegativeButton("إلغاء", null).show()
+    }
+
+    private fun whatsappNumber(phone: String): String {
+        var digits = phone.filter { it.isDigit() }
+        if (digits.startsWith("0")) digits = "213" + digits.drop(1)
+        return digits
+    }
+
+    private fun beginPage(title: String, back: () -> Unit): LinearLayout {
+        val root = FrameLayout(this).apply { setBackgroundColor(0xFFF2F6FF.toInt()) }
+        val scroll = ScrollView(this)
+        val body = column().apply { setPadding(dp(18), dp(10), dp(18), dp(24)) }
+        val header = row()
+        header.addView(button("‹", back), params(dp(44), dp(42)))
+        header.addView(label(title, 19f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        body.addView(header)
+        scroll.addView(body)
+        root.addView(scroll, FrameLayout.LayoutParams(-1, -1))
+        setContentView(root)
+        applySystemInsets(root)
+        return body
+    }
+
+    private fun adminOption(parent: LinearLayout, title: String, subtitle: String, action: () -> Unit) {
+        val card = column().apply {
+            background = shape(Color.WHITE, 16, 0xFFE0E9F5.toInt())
+            setPadding(dp(15), dp(12), dp(15), dp(12))
+            setOnClickListener { action() }
+        }
+        card.addView(label(title, 15f, 0xFF174A9A.toInt(), true))
+        card.addView(label(subtitle, 12f, 0xFF60748F.toInt()))
+        val lp = params(-1); lp.topMargin = dp(9); parent.addView(card, lp)
+    }
+
+    private fun showAdminDashboard() {
+        if (!requireAdmin()) return
+        val body = beginPage("لوحة إدارة KIOQ FLEXY") { showHome() }
+        val intro = column().apply {
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF123B75.toInt(), 0xFF1769D2.toInt())).apply { cornerRadius = dp(18).toFloat() }
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+        }
+        intro.addView(label("مرحباً بك في لوحة الإدارة", 18f, Color.WHITE, true))
+        intro.addView(label("إدارة موحدة لإعدادات التطبيق ومحتواه والزبائن", 12f, 0xFFDCEAFF.toInt()))
+        body.addView(intro)
+        val stats = label("جاري تحميل إحصائيات الزبائن...", 13f, 0xFF526783.toInt())
+        val statLp = params(); statLp.topMargin = dp(10); body.addView(stats, statLp)
+        db.collection("users").get().addOnSuccessListener { result ->
+            if (!isFinishing) stats.text = "عدد حسابات الزبائن المسجلة: " + result.size()
+        }.addOnFailureListener { if (!isFinishing) stats.text = "تعذر تحميل عدد الزبائن — تحقق من صلاحيات Firestore" }
+        body.addView(label("إدارة الحسابات", 15f, 0xFF24344B.toInt(), true).apply { setPadding(0, dp(14), 0, dp(2)) })
+        adminOption(body, "زبائني", "عرض الحسابات والبحث عن زبون ومراجعة بياناته", { showCustomers() })
+        body.addView(label("إدارة التطبيق", 15f, 0xFF24344B.toInt(), true).apply { setPadding(0, dp(14), 0, dp(2)) })
+        adminOption(body, "المنصات", "إظهار أو إخفاء FAWRIMOB وALAADZ وGIFTY وONECLICK", { editPlatformVisibility() })
+        adminOption(body, "الشريط الكتابي", "تعديل نص الإعلان وسرعة الحركة", { editTickerAndSpeed() })
+        adminOption(body, "صور البانر", "رفع صور من الهاتف وتعديل أوصافها وحذفها", { editImages() })
+        adminOption(body, "معلومات المحل", "تعديل الاسم والتعريف وأرقام الاتصال والبريد والرابط", { editShopProfile() })
+        adminOption(body, "التنبيهات والإعلانات", "نشر تنبيه يظهر للزبائن داخل التطبيق", { showNotifications() })
+        adminOption(body, "معاينة واجهة الزبون", "العودة إلى الصفحة الرئيسية كما يراها الزبون", { showHome() })
+    }
+
+    private fun showCustomers() {
+        if (!requireAdmin()) return
+        val body = beginPage("إدارة الزبائن") { showAdminDashboard() }
+        val search = EditText(this).apply { hint = "ابحث بالاسم أو رقم الهاتف"; singleLine = true }
+        body.addView(search, params(-1, dp(50)))
+        val count = label("جاري تحميل الزبائن...", 12f, 0xFF60748F.toInt())
+        body.addView(count)
+        val list = column()
+        body.addView(list)
+        db.collection("users").get().addOnSuccessListener { result ->
+            val docs = result.documents.sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
+            fun render(query: String) {
+                list.removeAllViews()
+                val filtered = docs.filter { doc ->
+                    val name = doc.getString("name") ?: ""
+                    val phone = doc.getString("phone") ?: ""
+                    name.contains(query, true) || phone.contains(query, true)
+                }
+                count.text = "عدد النتائج: " + filtered.size + " من " + docs.size
+                if (filtered.isEmpty()) {
+                    list.addView(label("لا توجد حسابات مطابقة", 13f, 0xFF60748F.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(24), 0, dp(24)) })
+                }
+                filtered.forEach { doc ->
+                    val name = doc.getString("name") ?: "زبون دون اسم"
+                    val phone = doc.getString("phone") ?: "غير مسجل"
+                    val item = column().apply { background = shape(Color.WHITE, 14, 0xFFE0E9F5.toInt()); setPadding(dp(12), dp(9), dp(12), dp(9)) }
+                    item.addView(label(name, 14f, 0xFF174A9A.toInt(), true))
+                    item.addView(label(phone, 12f, 0xFF60748F.toInt()))
+                    val created = doc.getTimestamp("createdAt")?.toDate()
+                    if (created != null) item.addView(label("تاريخ التسجيل: " + SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(created), 10f, 0xFF8090A5.toInt()))
+                    item.setOnClickListener { showCustomerDetails(doc.id, name, phone, created) }
+                    val lp = params(-1); lp.topMargin = dp(7); list.addView(item, lp)
+                }
+            }
+            render("")
+            search.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, countValue: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, countValue: Int) { render(s?.toString() ?: "") }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+        }.addOnFailureListener { count.text = "تعذر تحميل الزبائن. تأكد من نشر قواعد Firestore الجديدة." }
+    }
+
+    private fun showCustomerDetails(uid: String, name: String, phone: String, created: Date?) {
+        val message = "الاسم: " + name + "\nرقم الهاتف: " + phone + "\nمعرف الحساب: " + uid +
+            (if (created != null) "\nتاريخ التسجيل: " + SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(created) else "")
+        AlertDialog.Builder(this).setTitle("بيانات الزبون").setMessage(message)
+            .setNeutralButton("اتصال") { _, _ -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))) }
+            .setPositiveButton("تعديل الاسم") { _, _ -> editCustomerName(uid, name) }
+            .setNegativeButton("إغلاق", null).show()
+    }
+
+    private fun editCustomerName(uid: String, oldName: String) {
+        if (!requireAdmin()) return
+        val input = EditText(this).apply { setText(oldName); hint = "اسم الزبون" }
+        AlertDialog.Builder(this).setTitle("تعديل اسم الزبون").setView(input)
             .setPositiveButton("حفظ") { _, _ ->
-                val edit = prefs.edit()
-                fields.forEach { pair -> edit.putString("caption_" + pair.first, pair.second.text.toString()) }
-                edit.apply(); renderImageBanners()
+                val value = input.text.toString().trim()
+                if (value.isBlank()) { showMessage("الاسم لا يمكن أن يكون فارغاً"); return@setPositiveButton }
+                db.collection("users").document(uid).update("name", value)
+                    .addOnSuccessListener { showMessage("تم تحديث الاسم"); showCustomers() }
+                    .addOnFailureListener { showMessage("تعذر تعديل الاسم. تحقق من قواعد Firestore.") }
             }.setNegativeButton("إلغاء", null).show()
+    }
+
+    private fun editShopProfile() {
+        if (!requireAdmin()) return
+        val name = EditText(this).apply { setText(shopName); hint = "اسم المحل" }
+        val description = EditText(this).apply { setText(shopDescription); hint = "تعريف المحل"; minLines = 2 }
+        val mobilis = EditText(this).apply { setText(shopMobilis); hint = "رقم موبيليس"; inputType = 3 }
+        val ooredoo = EditText(this).apply { setText(shopOoredoo); hint = "رقم أوريدو"; inputType = 3 }
+        val email = EditText(this).apply { setText(shopEmail); hint = "البريد الإلكتروني"; inputType = 33 }
+        val url = EditText(this).apply { setText(shopUrl); hint = "رابط المتجر (اختياري)"; inputType = 17 }
+        val box = column().apply {
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            addView(label("اسم المحل", 12f)); addView(name, params(-1, dp(48)))
+            addView(label("تعريف المحل", 12f)); addView(description, params(-1, dp(72)))
+            addView(label("موبيليس", 12f)); addView(mobilis, params(-1, dp(48)))
+            addView(label("أوريدو", 12f)); addView(ooredoo, params(-1, dp(48)))
+            addView(label("البريد الإلكتروني", 12f)); addView(email, params(-1, dp(48)))
+            addView(label("رابط المتجر", 12f)); addView(url, params(-1, dp(48)))
+        }
+        AlertDialog.Builder(this).setTitle("معلومات المحل").setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("حفظ", null).setNegativeButton("إلغاء", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val n = name.text.toString().trim()
+                        if (n.isBlank()) { name.error = "أدخل اسم المحل"; return@setOnClickListener }
+                        val values = mapOf<String, Any>(
+                            "shopName" to n, "shopDescription" to description.text.toString().trim(),
+                            "shopMobilis" to mobilis.text.toString().trim(), "shopOoredoo" to ooredoo.text.toString().trim(),
+                            "shopEmail" to email.text.toString().trim(), "shopUrl" to url.text.toString().trim()
+                        )
+                        saveCloudSettings(values) {
+                            shopName = n; shopDescription = description.text.toString().trim()
+                            shopMobilis = mobilis.text.toString().trim(); shopOoredoo = ooredoo.text.toString().trim()
+                            shopEmail = email.text.toString().trim(); shopUrl = url.text.toString().trim()
+                            dialog.dismiss(); showAdminDashboard()
+                        }
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun showAccountInfo() {
+        val details = if (isAdmin) "نوع الحساب: الإدارة\nالبريد: " + (auth.currentUser?.email ?: "—")
+            else "نوع الحساب: زبون\nالاسم: " + customerName + "\nالهاتف: " + customerPhone
+        AlertDialog.Builder(this).setTitle("معلومات الحساب").setMessage(details).setPositiveButton("حسناً", null).show()
+    }
+
+    private fun showNotifications() {
+        val body = beginPage("التنبيهات والإعلانات") { if (isAdmin) showAdminDashboard() else showHome() }
+        if (isAdmin) {
+            val add = button("＋ نشر تنبيه جديد", { createAnnouncement() }, true)
+            val lp = params(-1, dp(46)); lp.bottomMargin = dp(10); body.addView(add, lp)
+        }
+        val list = column(); body.addView(list)
+        db.collection("announcements").get().addOnSuccessListener { result ->
+            list.removeAllViews()
+            val docs = result.documents.filter { isAdmin || it.getBoolean("active") != false }
+                .sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
+            if (docs.isEmpty()) list.addView(label("لا توجد تنبيهات حالياً", 13f, 0xFF60748F.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(28), 0, dp(28)) })
+            docs.forEach { doc ->
+                val title = doc.getString("title") ?: "تنبيه"
+                val message = doc.getString("message") ?: ""
+                val card = column().apply { background = shape(Color.WHITE, 14, 0xFFE0E9F5.toInt()); setPadding(dp(13), dp(11), dp(13), dp(11)) }
+                card.addView(label(title, 14f, 0xFF174A9A.toInt(), true))
+                card.addView(label(message, 12f, 0xFF526783.toInt()))
+                card.setOnClickListener {
+                    if (isAdmin) AlertDialog.Builder(this).setTitle(title).setMessage(message)
+                        .setNeutralButton("حذف") { _, _ ->
+                            doc.reference.delete().addOnSuccessListener { showNotifications() }
+                                .addOnFailureListener { showMessage("تعذر حذف التنبيه") }
+                        }.setPositiveButton("إغلاق", null).show()
+                    else showMessage(message)
+                }
+                val lp = params(-1); lp.topMargin = dp(8); list.addView(card, lp)
+            }
+        }.addOnFailureListener { showMessage("تعذر تحميل التنبيهات. تحقق من قواعد Firestore.") }
+    }
+
+    private fun createAnnouncement() {
+        if (!requireAdmin()) return
+        val title = EditText(this).apply { hint = "عنوان التنبيه" }
+        val message = EditText(this).apply { hint = "نص التنبيه"; minLines = 3 }
+        val box = column().apply { setPadding(dp(12), dp(8), dp(12), dp(4)); addView(title); addView(message) }
+        AlertDialog.Builder(this).setTitle("نشر تنبيه للزبائن").setView(box)
+            .setPositiveButton("نشر", null).setNegativeButton("إلغاء", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val t = title.text.toString().trim()
+                        val m = message.text.toString().trim()
+                        if (t.isBlank() || m.isBlank()) { showMessage("أدخل العنوان ونص التنبيه"); return@setOnClickListener }
+                        val data = hashMapOf<String, Any>(
+                            "title" to t, "message" to m, "active" to true,
+                            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                        db.collection("announcements").add(data)
+                            .addOnSuccessListener { dialog.dismiss(); showNotifications(); showMessage("تم نشر التنبيه") }
+                            .addOnFailureListener { showMessage("تعذر نشر التنبيه. تحقق من قواعد Firestore.") }
+                    }
+                }
+                dialog.show()
+            }
     }
 
     private fun showMessage(message: String) {
