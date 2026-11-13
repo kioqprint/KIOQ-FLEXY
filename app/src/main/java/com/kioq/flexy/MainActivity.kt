@@ -525,48 +525,44 @@ class MainActivity : Activity() {
     }
 
     private fun editImages() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "image/*"
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
-        startActivityForResult(intent, 2401)
+        startActivityForResult(pick, 2401)
     }
 
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != 2401 || resultCode != RESULT_OK || data == null) return
-        val picked = mutableListOf<Uri>()
-        data.clipData?.let { clip -> for (i in 0 until clip.itemCount) picked.add(clip.getItemAt(i).uri) }
-        if (picked.isEmpty()) data.data?.let { picked.add(it) }
-        picked.forEach { uri ->
+        val selected = mutableListOf<Uri>()
+        data.clipData?.let { clip -> for (i in 0 until clip.itemCount) selected.add(clip.getItemAt(i).uri) }
+        if (selected.isEmpty()) data.data?.let { selected.add(it) }
+        selected.forEach { uri ->
             try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { }
             imageUrls.add(uri.toString())
         }
         imageUrls = imageUrls.distinct().toMutableList()
-        prefs.edit().putString("images", imageUrls.joinToString("\\n")).apply()
+        prefs.edit().putString("images", imageUrls.joinToString("\n")).apply()
         editBannerCaptions()
     }
 
     private fun editBannerCaptions() {
-        val wrap = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
+        val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
         val fields = imageUrls.mapIndexed { index, _ ->
-            val field = EditText(this).apply {
-                hint = "النص أسفل الصورة ${index + 1}"
-                setText(prefs.getString("caption_$index", ""))
-            }
-            wrap.addView(label("الصورة ${index + 1}", 13f, 0xFF176B63.toInt(), true))
-            wrap.addView(field, params(-1, dp(48)))
-            index to field
+            val input = EditText(this).apply { hint = "النص أسفل الصورة " + (index + 1); setText(prefs.getString("caption_" + index, "")) }
+            box.addView(label("الصورة " + (index + 1), 13f, 0xFF176B63.toInt(), true))
+            box.addView(input, params(-1, dp(48)))
+            index to input
         }
-        AlertDialog.Builder(this).setTitle("وصف صور البانر").setView(wrap)
+        AlertDialog.Builder(this).setTitle("وصف صور البانر").setView(box)
             .setPositiveButton("حفظ") { _, _ ->
                 val edit = prefs.edit()
-                fields.forEach { (index, field) -> edit.putString("caption_$index", field.text.toString()) }
-                edit.apply()
-                renderImageBanners()
+                fields.forEach { pair -> edit.putString("caption_" + pair.first, pair.second.text.toString()) }
+                edit.apply(); renderImageBanners()
             }.setNegativeButton("إلغاء", null).show()
     }
 
