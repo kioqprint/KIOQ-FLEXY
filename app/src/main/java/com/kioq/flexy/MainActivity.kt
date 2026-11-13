@@ -807,7 +807,7 @@ class MainActivity : Activity() {
     private fun showCustomers() {
         if (!requireAdmin()) return
         val body = beginPage("إدارة الزبائن") { showAdminDashboard() }
-        val search = EditText(this).apply { hint = "ابحث بالاسم أو رقم الهاتف"; singleLine = true }
+        val search = EditText(this).apply { hint = "ابحث بالاسم أو رقم الهاتف"; isSingleLine = true }
         body.addView(search, params(-1, dp(50)))
         val count = label("جاري تحميل الزبائن...", 12f, 0xFF60748F.toInt())
         body.addView(count)
