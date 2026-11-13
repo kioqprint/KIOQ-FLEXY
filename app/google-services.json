@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "234370494045",
+    "project_id": "kioq-flexy",
+    "storage_bucket": "kioq-flexy.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:234370494045:android:94ae6227a9597c237227b4",
+        "android_client_info": {
+          "package_name": "com.kioq.flexy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeqveTb8nDX5Chq8dC_f47SAGTiJRzg-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
