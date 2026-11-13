@@ -668,7 +668,7 @@ class MainActivity : Activity() {
                             val url = entry?.get("url") as? String
                             if (!url.isNullOrBlank()) {
                                 imageUrls.add(url)
-                                imageCaptions.add(entry["caption"] as? String ?: "")
+                                imageCaptions.add(entry?.get("caption") as? String ?: "")
                             }
                         }
                     }
@@ -922,9 +922,10 @@ class MainActivity : Activity() {
             val lp = params(-1, dp(46)); lp.bottomMargin = dp(10); body.addView(add, lp)
         }
         val list = column(); body.addView(list)
-        db.collection("announcements").get().addOnSuccessListener { result ->
+        val announcementQuery = if (isAdmin) db.collection("announcements").get() else db.collection("announcements").whereEqualTo("active", true).get()
+        announcementQuery.addOnSuccessListener { result ->
             list.removeAllViews()
-            val docs = result.documents.filter { isAdmin || it.getBoolean("active") != false }
+            val docs = result.documents.filter { isAdmin || it.getBoolean("active") == true }
                 .sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
             if (docs.isEmpty()) list.addView(label("لا توجد تنبيهات حالياً", 13f, 0xFF60748F.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(28), 0, dp(28)) })
             docs.forEach { doc ->
