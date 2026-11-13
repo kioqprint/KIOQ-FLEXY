@@ -99,8 +99,8 @@ class MainActivity : Activity() {
     private fun button(text: String, onClick: () -> Unit, primary: Boolean = false): TextView =
         TextView(this).apply {
             this.text = text; textSize = 14f; gravity = Gravity.CENTER
-            setTextColor(if (primary) Color.WHITE else 0xFF24344B.toInt())
-            background = shape(if (primary) 0xFF1769D2.toInt() else 0xFFEAF0F4.toInt(), 13)
+            setTextColor(if (primary) Color.WHITE else 0xFF18324F.toInt())
+            background = shape(if (primary) 0xFF1558B0.toInt() else 0xFFE1EAF5.toInt(), 13)
             setPadding(dp(16), dp(10), dp(16), dp(10)); setOnClickListener { onClick() }
         }
 
@@ -124,7 +124,7 @@ class MainActivity : Activity() {
         val body = column().apply { setPadding(dp(22), dp(32), dp(22), dp(24)) }
         val scroll = ScrollView(this); scroll.addView(body); root.addView(scroll)
         body.addView(label("kioq flexy", 30f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
-        body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF7486A4.toInt()).apply { gravity = Gravity.CENTER })
+        body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF526783.toInt()).apply { gravity = Gravity.CENTER })
         val card = column().apply { background = shape(Color.WHITE, 20); setPadding(dp(16), dp(18), dp(16), dp(16)); elevation = dp(3).toFloat() }
         card.addView(label("مرحباً بك", 19f, 0xFF123B75.toInt(), true))
         card.addView(label("أدخل رقم هاتفك وكلمة المرور", 13f, 0xFF7486A4.toInt()))
@@ -231,7 +231,7 @@ class MainActivity : Activity() {
         top.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f))
         val brand = column().apply { gravity = Gravity.CENTER }
         brand.addView(label("kioq flexy", 21f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
-        brand.addView(label("KIOQ.STORE", 10f, 0xFF74838E.toInt(), true).apply { gravity = Gravity.CENTER })
+        brand.addView(label("KIOQ.STORE", 10f, 0xFF526783.toInt(), true).apply { gravity = Gravity.CENTER })
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(button("☰", { openDrawer(frame) }), params(dp(44), dp(42)))
         page.addView(top)
@@ -270,12 +270,20 @@ class MainActivity : Activity() {
 
         val title = label(if (french) "Vos plateformes" else "منصاتك", 18f, 0xFF24344B.toInt(), true)
         val titleLp = params(); titleLp.topMargin = dp(20); page.addView(title, titleLp)
-        page.addView(label(if (french) "Choisissez une plateforme pour consulter votre espace" else "اختر المنصة لعرض حسابك ورصيدك", 12f, 0xFF788692.toInt()))
-        for (i in platforms.indices step 2) {
+        page.addView(label(if (french) "Choisissez une plateforme pour consulter votre espace" else "اختر المنصة لعرض حسابك ورصيدك", 12f, 0xFF526783.toInt()))
+        val visiblePlatforms = platforms.filter { prefs.getBoolean("platform_visible_${it.name}", true) }
+        visiblePlatforms.chunked(2).forEach { pair ->
             val line = row()
-            line.addView(platformCard(platforms[i]), LinearLayout.LayoutParams(0, dp(156), 1f).apply { marginEnd = dp(7); topMargin = dp(12) })
-            line.addView(platformCard(platforms[i + 1]), LinearLayout.LayoutParams(0, dp(156), 1f).apply { marginStart = dp(7); topMargin = dp(12) })
+            line.addView(platformCard(pair[0]), LinearLayout.LayoutParams(0, dp(148), 1f).apply { marginEnd = dp(7); topMargin = dp(12) })
+            if (pair.size > 1) {
+                line.addView(platformCard(pair[1]), LinearLayout.LayoutParams(0, dp(148), 1f).apply { marginStart = dp(7); topMargin = dp(12) })
+            } else {
+                line.addView(Space(this), LinearLayout.LayoutParams(0, dp(148), 1f).apply { marginStart = dp(7) })
+            }
             page.addView(line)
+        }
+        if (visiblePlatforms.isEmpty()) {
+            page.addView(label("لا توجد منصات ظاهرة حالياً", 13f, 0xFF526783.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(20), 0, dp(20)) })
         }
 
         val store = button("⌂   KIOQ.STORE", { showMessage(if (french) "Lien de la boutique à configurer" else "رابط المتجر سيضاف من إعدادات الإدارة") }, true)
@@ -283,7 +291,7 @@ class MainActivity : Activity() {
 
         val footer = row().apply { gravity = Gravity.CENTER }
         footer.addView(button("‹", { if (webView != null) showHome() else onBackPressed() }))
-        footer.addView(label(if (french) "  Espace KIOQ.STORE" else "  فضاء KIOQ.STORE", 11f, 0xFF8B98A2.toInt()))
+        footer.addView(label(if (french) "  Espace KIOQ.STORE" else "  فضاء KIOQ.STORE", 11f, 0xFF526783.toInt()))
         val flp = params(); flp.topMargin = dp(14); page.addView(footer, flp)
 
         setContentView(frame)
@@ -309,17 +317,22 @@ class MainActivity : Activity() {
             "GIFTY" -> "play.google.com"
             else -> "oneclickdz.com"
         }
+        val logoUrl = when (p.name) {
+            "FAWRIMOB" -> "https://fawrimob.com/favicon.ico"
+            "ALAADZ" -> "https://alaadz.com/favicon.ico"
+            "GIFTY" -> "https://gifty-dz.com/favicon.ico"
+            else -> "https://oneclickdz.com/favicon.ico"
+        }
         thread {
             try {
-                val bitmap = BitmapFactory.decodeStream(URL("https://www.google.com/s2/favicons?domain=$domain&sz=128").openStream())
+                val bitmap = URL(logoUrl).openStream().use { BitmapFactory.decodeStream(it) }
                 runOnUiThread { if (bitmap != null) logo.setImageBitmap(bitmap) }
             } catch (_: Exception) { }
         }
         card.addView(label(p.name, 14f, 0xFF1E3044.toInt(), true).apply { gravity = Gravity.CENTER }, params(-1).apply { topMargin = dp(6) })
-        card.addView(label(p.subtitle, 11f, 0xFF82909A.toInt()).apply { gravity = Gravity.CENTER })
+        card.addView(label(p.subtitle, 11f, 0xFF526783.toInt()).apply { gravity = Gravity.CENTER })
         val balance = prefs.getString("balance_${p.name}", "غير مسجل") ?: "غير مسجل"
-        card.addView(label("الرصيد: $balance", 12f, 0xFF1769D2.toInt(), true).apply { gravity = Gravity.CENTER })
-        card.addView(button(if (french) "Voir le solde" else "عرض الرصيد", { openPlatform(p) }, true), params(-1, dp(32)).apply { topMargin = dp(6) })
+        card.addView(button(if (french) "Ouvrir" else "فتح المنصة", { openPlatform(p) }, true), params(-1, dp(34)).apply { topMargin = dp(8) })
         return card
     }
 
@@ -435,7 +448,7 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(28), dp(18), dp(18)); background = shape(Color.WHITE, 0)
         }
         panel.addView(label("kioq flexy", 24f, 0xFF174A9A.toInt(), true))
-        panel.addView(label("KIOQ.STORE", 11f, 0xFF8294B5.toInt()))
+        panel.addView(label("KIOQ.STORE", 11f, 0xFF526783.toInt()))
         panel.addView(View(this).apply { setBackgroundColor(0xFFE8EEEE.toInt()) }, params(-1, dp(1)))
         val items = mutableListOf<Pair<String, () -> Unit>>()
         items.add("معلومات الحساب" to { showMessage("حساب KIOQ.STORE") })
@@ -475,15 +488,14 @@ class MainActivity : Activity() {
 
     private fun showAdminPanel() {
         if (!isAdmin) { showMessage("هذه الخاصية متاحة للإدارة فقط"); return }
-        val options = arrayOf("الشريط الكتابي والسرعة", "صور البانر", "تعديل الأرصدة", "إدارة ظهور المنصات", "قائمة الزبائن")
+        val options = arrayOf("الشريط الكتابي والسرعة", "صور البانر", "إدارة ظهور المنصات", "قائمة الزبائن")
         AlertDialog.Builder(this).setTitle("إعدادات الإدارة")
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> editTickerAndSpeed()
                     1 -> editImages()
-                    2 -> editBalances()
-                    3 -> showMessage("إعدادات إظهار وإخفاء المنصات ستربط بصلاحيات الإدارة وقاعدة البيانات.")
-                    4 -> showMessage("قائمة الزبائن تتطلب ربط قاعدة البيانات وتفعيل حساب الإدارة.")
+                    2 -> editPlatformVisibility()
+                    3 -> showMessage("قائمة الزبائن غير مفعّلة بعد.")
                 }
             }.show()
     }
@@ -517,20 +529,21 @@ class MainActivity : Activity() {
             }.setNegativeButton("إلغاء", null).show()
     }
 
-    private fun editBalances() {
-        val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
-        val fields = platforms.map { p ->
-            val input = EditText(this).apply { hint = "رصيد " + p.name; setText(prefs.getString("balance_" + p.name, "")); inputType = 8194 }
-            box.addView(label(p.name, 13f, 0xFF1769D2.toInt(), true))
-            box.addView(input, params(-1, dp(48)))
-            p.name to input
-        }
-        AlertDialog.Builder(this).setTitle("تحديث الأرصدة").setMessage("أدخل الأرصدة المؤكدة يدوياً. لا يوجد ربط مباشر بالمنصات حالياً.")
-            .setView(box).setPositiveButton("حفظ") { _, _ ->
+    private fun editPlatformVisibility() {
+        if (!isAdmin) { showMessage("هذه الخاصية متاحة للإدارة فقط"); return }
+        val names = platforms.map { it.name }.toTypedArray()
+        val checked = BooleanArray(platforms.size) { i -> prefs.getBoolean("platform_visible_${platforms[i].name}", true) }
+        AlertDialog.Builder(this)
+            .setTitle("إظهار أو إخفاء المنصات")
+            .setMultiChoiceItems(names, checked) { _, which, isChecked -> checked[which] = isChecked }
+            .setPositiveButton("حفظ") { _, _ ->
                 val edit = prefs.edit()
-                fields.forEach { pair -> edit.putString("balance_" + pair.first, pair.second.text.toString().trim().ifBlank { "غير مسجل" }) }
-                edit.apply(); showHome()
-            }.setNegativeButton("إلغاء", null).show()
+                platforms.forEachIndexed { i, p -> edit.putBoolean("platform_visible_${p.name}", checked[i]) }
+                edit.apply()
+                showHome()
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
     }
 
     private fun editTicker() {
