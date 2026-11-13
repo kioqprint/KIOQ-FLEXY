@@ -326,7 +326,10 @@ class MainActivity : Activity() {
             .setPositiveButton("حفظ") { _, _ ->
                 tickerText = input.text.toString()
                 prefs.edit().putString("ticker", tickerText).apply()
-                tickerView?.text = tickerText\n                tickerView?.let { tv -> (tv.parent as? FrameLayout)?.let { startTickerAnimation(it, tv) } }
+                tickerView?.text = tickerText
+                tickerView?.let { tv ->
+                    (tv.parent as? FrameLayout)?.let { container -> startTickerAnimation(container, tv) }
+                }
             }.setNegativeButton("إلغاء", null).show()
     }
 
