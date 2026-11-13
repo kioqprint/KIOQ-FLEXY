@@ -161,6 +161,9 @@ class MainActivity : Activity() {
         val flp = params(); flp.topMargin = dp(14); page.addView(footer, flp)
 
         setContentView(frame)
+        frame.alpha = 0f
+        frame.translationY = dp(10).toFloat()
+        frame.animate().alpha(1f).translationY(0f).setDuration(220).start()
         startBannerScroll()
     }
 
@@ -171,17 +174,25 @@ class MainActivity : Activity() {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             elevation = dp(2).toFloat()
         }
-        val mark = TextView(this).apply {
-            text = p.mark; textSize = 22f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            background = shape(when (p.mark) { "F" -> 0xFF1683A5.toInt(); "A" -> 0xFF4D6BB3.toInt(); "G" -> 0xFF8254B5.toInt(); else -> 0xFFE18A36.toInt() }, 16)
+        val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setPadding(dp(5), dp(5), dp(5), dp(5)); background = shape(0xFFF5F8F8.toInt(), 14) }
+        card.addView(logo, params(dp(52), dp(52)))
+        val domain = when (p.name) {
+            "FAWRIMOB" -> "fawrimob.com"
+            "ALAADZ" -> "alaadz.com"
+            "GIFTY" -> "play.google.com"
+            else -> "oneclickdz.com"
         }
-        card.addView(mark, params(dp(48), dp(48)))
-        val name = label(p.name, 14f, 0xFF1E3044.toInt(), true).apply { gravity = Gravity.CENTER }
-        val nlp = params(-1); nlp.topMargin = dp(7); card.addView(name, nlp)
+        thread {
+            try {
+                val bitmap = BitmapFactory.decodeStream(URL("https://www.google.com/s2/favicons?domain=$domain&sz=128").openStream())
+                runOnUiThread { if (bitmap != null) logo.setImageBitmap(bitmap) }
+            } catch (_: Exception) { }
+        }
+        card.addView(label(p.name, 14f, 0xFF1E3044.toInt(), true).apply { gravity = Gravity.CENTER }, params(-1).apply { topMargin = dp(6) })
         card.addView(label(p.subtitle, 11f, 0xFF82909A.toInt()).apply { gravity = Gravity.CENTER })
-        val open = button(if (french) "Voir le solde" else "عرض الرصيد", { openPlatform(p) }, true)
-        val olp = params(-1, dp(34)); olp.topMargin = dp(8); card.addView(open, olp)
+        val balance = prefs.getString("balance_${p.name}", "غير مسجل") ?: "غير مسجل"
+        card.addView(label("الرصيد: $balance", 12f, 0xFF176B63.toInt(), true).apply { gravity = Gravity.CENTER })
+        card.addView(button(if (french) "Voir le solde" else "عرض الرصيد", { openPlatform(p) }, true), params(-1, dp(32)).apply { topMargin = dp(6) })
         return card
     }
 
