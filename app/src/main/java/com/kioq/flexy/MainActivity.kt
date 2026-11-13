@@ -218,6 +218,21 @@ class MainActivity : Activity() {
         handler.postDelayed(scrollTask, (110 - tickerSpeed).coerceAtLeast(20).toLong())
     }
 
+    private fun startTickerAnimation(container: FrameLayout, text: TextView) {
+        text.post {
+            tickerAnimator?.cancel()
+            val start = container.width.toFloat()
+            val end = -text.width.toFloat()
+            if (start <= 0f || text.width <= 0) return@post
+            tickerAnimator = ObjectAnimator.ofFloat(text, View.TRANSLATION_X, start, end).apply {
+                duration = ((100 - tickerSpeed).coerceAtLeast(10) * 180L)
+                repeatCount = ObjectAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                start()
+            }
+        }
+    }
+
     private fun openPlatform(p: Platform) {
         if (p.packageName != null) {
             val launch = packageManager.getLaunchIntentForPackage(p.packageName)
