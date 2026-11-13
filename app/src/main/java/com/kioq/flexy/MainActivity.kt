@@ -98,36 +98,77 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this); scroll.addView(body); root.addView(scroll)
         body.addView(label("kioq flexy", 30f, 0xFF123B3A.toInt(), true).apply { gravity = Gravity.CENTER })
         body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF74838E.toInt()).apply { gravity = Gravity.CENTER })
-        val customer = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(16), dp(16), dp(16)) }
-        customer.addView(label("دخول الزبون", 18f, 0xFF123B3A.toInt(), true))
-        val name = EditText(this).apply { hint = "الاسم الكامل"; setText(prefs.getString("customer_name", "")) }
-        val phone = EditText(this).apply { hint = "رقم الهاتف"; inputType = 3; setText(prefs.getString("customer_phone", "")) }
-        customer.addView(name, params(-1, dp(50))); customer.addView(phone, params(-1, dp(50)))
-        customer.addView(button("متابعة", {
-            val n = name.text.toString().trim(); val p = phone.text.toString().trim()
-            if (n.isBlank() || p.length < 8) showMessage("أدخل الاسم ورقم الهاتف")
-            else { prefs.edit().putString("customer_name", n).putString("customer_phone", p).putBoolean("customer_session", true).apply(); customerName = n; customerPhone = p; isAdmin = false; showHome() }
-        }, true), params(-1, dp(46)))
-        body.addView(customer, params(-1))
-        val admin = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(16), dp(16), dp(16)) }
-        admin.addView(label("دخول الإدارة", 18f, 0xFF123B3A.toInt(), true))
-        val email = EditText(this).apply { hint = "البريد الإلكتروني"; setText("KIOQ.STORE@gmail.com") }
-        val pass = EditText(this).apply { hint = "كلمة المرور"; inputType = 129 }
-        admin.addView(email, params(-1, dp(50))); admin.addView(pass, params(-1, dp(50)))
-        admin.addView(button("دخول الإدارة", {
-            if (!email.text.toString().trim().equals("KIOQ.STORE@gmail.com", true) || pass.text.isNullOrBlank()) showMessage("تحقق من البريد وكلمة المرور")
-            else auth.signInWithEmailAndPassword(email.text.toString().trim(), pass.text.toString())
-                .addOnSuccessListener { result ->
-                    val uid = result.user?.uid ?: return@addOnSuccessListener
-                    db.collection("users").document(uid).get().addOnSuccessListener { doc ->
-                        if (doc.getString("role") == "admin") { isAdmin = true; customerName = "الإدارة"; showHome() }
-                        else { auth.signOut(); showMessage("الحساب لا يملك صلاحية الإدارة. يجب ضبط role=admin في Firestore.") }
-                    }.addOnFailureListener { auth.signOut(); showMessage("تعذر التحقق من الصلاحيات") }
-                }.addOnFailureListener { showMessage("حساب الإدارة غير منشأ أو كلمة المرور غير صحيحة في Firebase Auth") }
-        }, true), params(-1, dp(46)))
-        body.addView(admin, params(-1).apply { topMargin = dp(14) })
-        body.addView(label("حساب الزبون محفوظ محلياً على هذا الهاتف. حساب الإدارة يستعمل Firebase.", 11f, 0xFF7B8993.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
-        setContentView(root); root.alpha = 0f; root.animate().alpha(1f).setDuration(220).start()
+        val card = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(18), dp(16), dp(16)) }
+        card.addView(label("مرحباً بك", 19f, 0xFF123B3A.toInt(), true))
+        card.addView(label("أدخل بيانات حسابك للمتابعة", 13f, 0xFF74838E.toInt()))
+        val name = EditText(this).apply {
+            hint = "الاسم الكامل"
+            setText(prefs.getString("customer_name", ""))
+            singleLine = true
+        }
+        val identity = EditText(this).apply {
+            hint = "رقم الهاتف أو البريد الإلكتروني"
+            setText(prefs.getString("customer_phone", ""))
+            singleLine = true
+        }
+        val password = EditText(this).apply {
+            hint = "كلمة المرور"
+            inputType = 129
+            singleLine = true
+        }
+        card.addView(name, params(-1, dp(50)))
+        card.addView(identity, params(-1, dp(50)))
+        card.addView(password, params(-1, dp(50)))
+        card.addView(button("متابعة", {
+            val id = identity.text.toString().trim()
+            val pass = password.text.toString()
+            if (id.contains("@")) {
+                if (!id.equals("KIOQ.STORE@gmail.com", true) || pass.isBlank()) {
+                    showMessage("تعذر الدخول. تحقق من بيانات الحساب.")
+                } else {
+                    auth.signInWithEmailAndPassword(id, pass)
+                        .addOnSuccessListener { result ->
+                            val signedEmail = result.user?.email.orEmpty()
+                            if (signedEmail.equals("KIOQ.STORE@gmail.com", true)) {
+                                prefs.edit().putBoolean("customer_session", false).apply()
+                                isAdmin = true
+                                customerName = "الإدارة"
+                                customerPhone = ""
+                                showHome()
+                            } else {
+                                auth.signOut()
+                                showMessage("تعذر الدخول. تحقق من بيانات الحساب.")
+                            }
+                        }
+                        .addOnFailureListener {
+                            showMessage("تعذر الدخول. تحقق من البريد وكلمة المرور.")
+                        }
+                }
+            } else {
+                val n = name.text.toString().trim()
+                if (n.isBlank() || id.length < 8) {
+                    showMessage("أدخل الاسم ورقم الهاتف بشكل صحيح.")
+                } else {
+                    prefs.edit()
+                        .putString("customer_name", n)
+                        .putString("customer_phone", id)
+                        .putBoolean("customer_session", true)
+                        .apply()
+                    customerName = n
+                    customerPhone = id
+                    isAdmin = false
+                    showHome()
+                }
+            }
+        }, true), params(-1, dp(48)).apply { topMargin = dp(12) })
+        body.addView(card, params(-1))
+        body.addView(label("إذا واجهت مشكلة في الدخول، تواصل مع المحل.", 11f, 0xFF7B8993.toInt()).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, 0)
+        })
+        setContentView(root)
+        root.alpha = 0f
+        root.animate().alpha(1f).setDuration(220).start()
     }
 
     private fun logout() {
