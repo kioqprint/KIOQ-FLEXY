@@ -21,7 +21,7 @@ class MainActivity : Activity() {
         Platform("FAWRIMOB", "https://fawrimob.com"),
         Platform("ALAADZ", "https://alaadz.com"),
         Platform("GIFTY", ""),
-        Platform("ONECLICK", "")
+        Platform("ONECLICK", "https://oneclickdz.com/ar")
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
