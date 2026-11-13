@@ -58,7 +58,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         tickerText = prefs.getString("ticker", "مرحبا بكم في kioq flexy — فضاؤكم لخدمات التعبئة") ?: ""
         tickerSpeed = prefs.getInt("speed", 45)
-        imageUrls = (prefs.getString("images", "") ?: "").split("\n").filter { it.startsWith("http") }.toMutableList()
+        imageUrls = (prefs.getString("images", "") ?: "").split("\n").filter { it.startsWith("http") || it.startsWith("content://") }.toMutableList()
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.statusBarColor = Color.WHITE
         window.navigationBarColor = 0xFFF4F7F8.toInt()
@@ -208,14 +208,18 @@ class MainActivity : Activity() {
             content.addView(placeholder, LinearLayout.LayoutParams(dp(290), dp(100)))
             return
         }
-        imageUrls.forEach { url ->
+        imageUrls.forEachIndexed { index, uriText ->
             val card = column().apply { background = shape(0xFFE5EFED.toInt(), 16); gravity = Gravity.CENTER }
             val img = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
             card.addView(img, params(dp(260), dp(100)))
-            content.addView(card, LinearLayout.LayoutParams(dp(260), dp(100)).apply { marginEnd = dp(10) })
-            thread {
+            val caption = prefs.getString("caption_$index", "") ?: ""
+            if (caption.isNotBlank()) card.addView(label(caption, 12f, 0xFF24344B.toInt()).apply { gravity = Gravity.CENTER; setPadding(dp(8), dp(4), dp(8), dp(4)) })
+            content.addView(card, LinearLayout.LayoutParams(dp(260), -2).apply { marginEnd = dp(10) })
+            if (uriText.startsWith("content://")) {
+                try { img.setImageURI(Uri.parse(uriText)) } catch (_: Exception) { }
+            } else thread {
                 try {
-                    val bitmap = URL(url).openStream().use { BitmapFactory.decodeStream(it) }
+                    val bitmap = URL(uriText).openStream().use { BitmapFactory.decodeStream(it) }
                     runOnUiThread { img.setImageBitmap(bitmap) }
                 } catch (_: Exception) { runOnUiThread { img.setImageDrawable(null) } }
             }
@@ -431,14 +435,47 @@ class MainActivity : Activity() {
     }
 
     private fun editImages() {
-        val input = EditText(this).apply {
-            setText(imageUrls.joinToString("\n")); hint = "ضع رابط كل صورة في سطر مستقل"
-            minLines = 4; gravity = Gravity.TOP
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
-        AlertDialog.Builder(this).setTitle("روابط صور البانر").setMessage("أضف رابط صورة مباشر لكل سطر.")
-            .setView(input).setPositiveButton("حفظ") { _, _ ->
-                imageUrls = input.text.toString().lines().map { it.trim() }.filter { it.startsWith("https://") }.toMutableList()
-                prefs.edit().putString("images", imageUrls.joinToString("\n")).apply()
+        startActivityForResult(intent, 2401)
+    }
+
+    @Deprecated("Deprecated in Android")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 2401 || resultCode != RESULT_OK || data == null) return
+        val picked = mutableListOf<Uri>()
+        data.clipData?.let { clip -> for (i in 0 until clip.itemCount) picked.add(clip.getItemAt(i).uri) }
+        if (picked.isEmpty()) data.data?.let { picked.add(it) }
+        picked.forEach { uri ->
+            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { }
+            imageUrls.add(uri.toString())
+        }
+        imageUrls = imageUrls.distinct().toMutableList()
+        prefs.edit().putString("images", imageUrls.joinToString("\\n")).apply()
+        editBannerCaptions()
+    }
+
+    private fun editBannerCaptions() {
+        val wrap = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
+        val fields = imageUrls.mapIndexed { index, _ ->
+            val field = EditText(this).apply {
+                hint = "النص أسفل الصورة ${index + 1}"
+                setText(prefs.getString("caption_$index", ""))
+            }
+            wrap.addView(label("الصورة ${index + 1}", 13f, 0xFF176B63.toInt(), true))
+            wrap.addView(field, params(-1, dp(48)))
+            index to field
+        }
+        AlertDialog.Builder(this).setTitle("وصف صور البانر").setView(wrap)
+            .setPositiveButton("حفظ") { _, _ ->
+                val edit = prefs.edit()
+                fields.forEach { (index, field) -> edit.putString("caption_$index", field.text.toString()) }
+                edit.apply()
                 renderImageBanners()
             }.setNegativeButton("إلغاء", null).show()
     }
