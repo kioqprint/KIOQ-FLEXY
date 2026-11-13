@@ -70,13 +70,12 @@ class MainActivity : Activity() {
             prefs.edit().putBoolean("customer_session", false).apply()
             showLogin()
         } else if (user.email.equals("KIOQ.STORE@gmail.com", true)) {
-            db.collection("users").document(user.uid).get()
-                .addOnSuccessListener { doc ->
-                    if (doc.getString("role") == "admin") {
-                        isAdmin = true; customerName = "الإدارة"; customerPhone = ""; showHome()
-                    } else { auth.signOut(); showLogin() }
-                }
-                .addOnFailureListener { auth.signOut(); showLogin() }
+            // The dedicated administrator is authenticated by Firebase Auth.
+            // Do not require a Firestore role document for the first admin login.
+            isAdmin = true
+            customerName = "الإدارة"
+            customerPhone = ""
+            showHome()
         } else {
             isAdmin = false
             customerName = user.displayName?.takeIf { it.isNotBlank() } ?: "زبون"
@@ -130,7 +129,7 @@ class MainActivity : Activity() {
         card.addView(label("مرحباً بك", 19f, 0xFF123B75.toInt(), true))
         card.addView(label("أدخل رقم هاتفك وكلمة المرور", 13f, 0xFF7486A4.toInt()))
         val name = EditText(this).apply { hint = "الاسم الكامل (للحساب الجديد)"; setText(prefs.getString("customer_name", "")); isSingleLine = true }
-        val identity = EditText(this).apply { hint = "رقم الهاتف أو البريد الإداري"; setText(prefs.getString("customer_phone", "")); isSingleLine = true }
+        val identity = EditText(this).apply { hint = "رقم الهاتف"; setText(prefs.getString("customer_phone", "")); isSingleLine = true }
         val password = EditText(this).apply { hint = "كلمة المرور"; inputType = 129; isSingleLine = true }
         card.addView(name, params(-1, dp(50)))
         card.addView(identity, params(-1, dp(50)))
@@ -142,21 +141,14 @@ class MainActivity : Activity() {
                 if (!id.equals("KIOQ.STORE@gmail.com", true) || pass.isBlank()) {
                     showMessage("تعذر الدخول. تحقق من بيانات الحساب.")
                 } else {
-                    auth.signInWithEmailAndPassword(id, pass)
-                        .addOnSuccessListener { result ->
-                            val uid = result.user?.uid ?: return@addOnSuccessListener
-                            db.collection("users").document(uid).get()
-                                .addOnSuccessListener { doc ->
-                                    if (doc.getString("role") == "admin") {
-                                        isAdmin = true; customerName = "الإدارة"; customerPhone = ""; showHome()
-                                    } else {
-                                        auth.signOut()
-                                        showMessage("تعذر الدخول. يرجى مراجعة بيانات الحساب.")
-                                    }
-                                }
-                                .addOnFailureListener { auth.signOut(); showMessage("تعذر التحقق من الحساب. حاول لاحقاً.") }
+                    auth.signInWithEmailAndPassword("KIOQ.STORE@gmail.com", pass)
+                        .addOnSuccessListener {
+                            isAdmin = true
+                            customerName = "الإدارة"
+                            customerPhone = ""
+                            showHome()
                         }
-                        .addOnFailureListener { showMessage("تعذر الدخول. تحقق من البريد وكلمة المرور.") }
+                        .addOnFailureListener { showMessage("تعذر الدخول. تحقق من بيانات الحساب.") }
                 }
             } else {
                 val phone = normalizePhone(id)
