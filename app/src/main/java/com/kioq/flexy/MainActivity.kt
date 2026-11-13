@@ -2,6 +2,8 @@ package com.kioqstore.flexy
 
 import android.app.Activity
 import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import android.animation.ObjectAnimator
@@ -59,8 +61,8 @@ class MainActivity : Activity() {
         tickerText = prefs.getString("ticker", "مرحبا بكم في kioq flexy — فضاؤكم لخدمات التعبئة") ?: ""
         tickerSpeed = prefs.getInt("speed", 45)
         imageUrls = (prefs.getString("images", "") ?: "").split("\n").filter { it.startsWith("http") || it.startsWith("content://") }.toMutableList()
-        WindowCompat.setDecorFitsSystemWindows(window, true)
-        window.statusBarColor = Color.WHITE
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = 0xFFF4F7F8.toInt()
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         showLogin()
@@ -206,6 +208,7 @@ class MainActivity : Activity() {
         val flp = params(); flp.topMargin = dp(14); page.addView(footer, flp)
 
         setContentView(frame)
+        applySystemInsets(frame)
         frame.alpha = 0f
         frame.translationY = dp(10).toFloat()
         frame.animate().alpha(1f).translationY(0f).setDuration(220).start()
@@ -331,6 +334,18 @@ class MainActivity : Activity() {
         bottom.addView(button("‹", { if (web.canGoBack()) web.goBack() else showHome() }))
         layout.addView(bottom, params(-1, dp(48)))
         setContentView(layout)
+        applySystemInsets(layout)
+        layout.alpha = 0f; layout.translationY = dp(10).toFloat()
+        layout.animate().alpha(1f).translationY(0f).setDuration(220).start()
+    }
+
+    private fun applySystemInsets(root: View) {
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(view.paddingLeft, bars.top, view.paddingRight, bars.bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     private fun openDrawer(frame: FrameLayout) {
