@@ -226,7 +226,7 @@ class MainActivity : Activity() {
     private fun showHome() {
         webView?.destroy(); webView = null
         autoScroll = false
-        val frame = FrameLayout(this).apply { setBackgroundColor(0xFFF4F7F8.toInt()) }
+        val frame = FrameLayout(this).apply { setBackgroundColor(0xFFF2F6FF.toInt()) }
         val page = column().apply { setPadding(dp(18), dp(8), dp(18), dp(12)) }
         val scroll = ScrollView(this)
         scroll.addView(page)
