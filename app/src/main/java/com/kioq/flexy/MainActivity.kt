@@ -455,6 +455,51 @@ class MainActivity : Activity() {
             }.setNegativeButton("إلغاء", null).show()
     }
 
+
+    private fun showContacts() {
+        val choices = arrayOf("اتصال موبيليس 0699761222", "اتصال أوريدو 0555552711", "واتساب موبيليس", "واتساب أوريدو", "البريد الإلكتروني kioq.store@gmail.com")
+        AlertDialog.Builder(this).setTitle("وسائل الاتصال").setItems(choices) { _, which ->
+            when (which) {
+                0 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0699761222")))
+                1 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0555552711")))
+                2 -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/213699761222")))
+                3 -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/213555552711")))
+                4 -> startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:kioq.store@gmail.com")))
+            }
+        }.setNegativeButton("إغلاق", null).show()
+    }
+
+    private fun editTickerAndSpeed() {
+        val input = EditText(this).apply { setText(tickerText); hint = "النص المتحرك" }
+        val seek = SeekBar(this).apply { max = 90; progress = tickerSpeed }
+        val box = column().apply { setPadding(dp(16), dp(8), dp(16), dp(8)); addView(input); addView(label("السرعة", 13f)); addView(seek) }
+        AlertDialog.Builder(this).setTitle("الشريط الكتابي والسرعة").setView(box)
+            .setPositiveButton("حفظ") { _, _ ->
+                tickerText = input.text.toString()
+                tickerSpeed = seek.progress.coerceIn(10, 90)
+                prefs.edit().putString("ticker", tickerText).putInt("speed", tickerSpeed).apply()
+                tickerView?.text = tickerText
+                tickerView?.let { tv -> (tv.parent as? FrameLayout)?.let { startTickerAnimation(it, tv) } }
+                startBannerScroll()
+            }.setNegativeButton("إلغاء", null).show()
+    }
+
+    private fun editBalances() {
+        val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
+        val fields = platforms.map { p ->
+            val input = EditText(this).apply { hint = "رصيد " + p.name; setText(prefs.getString("balance_" + p.name, "")); inputType = 8194 }
+            box.addView(label(p.name, 13f, 0xFF176B63.toInt(), true))
+            box.addView(input, params(-1, dp(48)))
+            p.name to input
+        }
+        AlertDialog.Builder(this).setTitle("تحديث الأرصدة").setMessage("أدخل الأرصدة المؤكدة يدوياً. لا يوجد ربط مباشر بالمنصات حالياً.")
+            .setView(box).setPositiveButton("حفظ") { _, _ ->
+                val edit = prefs.edit()
+                fields.forEach { pair -> edit.putString("balance_" + pair.first, pair.second.text.toString().trim().ifBlank { "غير مسجل" }) }
+                edit.apply(); showHome()
+            }.setNegativeButton("إلغاء", null).show()
+    }
+
     private fun editTicker() {
         val input = EditText(this).apply { setText(tickerText); hint = "اكتب الإعلان المتحرك" }
         AlertDialog.Builder(this).setTitle("نص البانر").setView(input)
