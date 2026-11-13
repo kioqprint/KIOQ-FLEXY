@@ -343,16 +343,17 @@ class MainActivity : Activity() {
         panel.addView(label("kioq flexy", 24f, 0xFF14544D.toInt(), true))
         panel.addView(label("KIOQ.STORE", 11f, 0xFF83918F.toInt()))
         panel.addView(View(this).apply { setBackgroundColor(0xFFE8EEEE.toInt()) }, params(-1, dp(1)))
-        val items = listOf(
-            "معلومات الحساب" to { showMessage("ملف الحساب — سيتم ربط بيانات العميل عند تفعيل تسجيل الدخول") },
-            "زبائني" to { showMessage("قائمة الزبائن ستظهر بعد ربط قاعدة البيانات ولوحة الإدارة") },
-            "المنصات" to { showHome() },
-            "التنبيهات" to { showMessage("لا توجد تنبيهات جديدة") },
-            "التنزيلات والتحديثات" to { showMessage("نسخة التطبيق الحالية 1.0.0") },
-            "الإعدادات" to { showAdminPanel() },
-            "وسائل الاتصال" to { showContacts() },
-            "اتصل بنا" to { showContacts() }
-        )
+        val items = mutableListOf<Pair<String, () -> Unit>>()
+        items.add("معلومات الحساب" to { showMessage("حساب KIOQ.STORE") })
+        if (isAdmin) {
+            items.add("زبائني" to { showMessage("إدارة الزبائن تحتاج استكمال ربط قاعدة البيانات.") })
+            items.add("الإعدادات" to { showAdminPanel() })
+        }
+        items.add("المنصات" to { showHome() })
+        items.add("التنبيهات" to { showMessage("لا توجد تنبيهات جديدة") })
+        items.add("التنزيلات والتحديثات" to { showMessage("نسخة التطبيق الحالية 1.0.0") })
+        items.add("وسائل الاتصال" to { showContacts() })
+        items.add("تسجيل الخروج" to { logout() })
         items.forEach { (name, action) ->
             val item = button("  $name", { closeDrawer(frame); action() })
             item.gravity = Gravity.START or Gravity.CENTER_VERTICAL
