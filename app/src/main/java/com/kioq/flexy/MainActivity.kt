@@ -65,7 +65,7 @@ class MainActivity : Activity() {
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = 0xFFF4F7F8.toInt()
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        showLogin()
+        if (prefs.getBoolean("customer_session", false)) { customerName = prefs.getString("customer_name", "") ?: ""; customerPhone = prefs.getString("customer_phone", "") ?: ""; showHome() } else showLogin()
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -106,7 +106,7 @@ class MainActivity : Activity() {
         customer.addView(button("متابعة", {
             val n = name.text.toString().trim(); val p = phone.text.toString().trim()
             if (n.isBlank() || p.length < 8) showMessage("أدخل الاسم ورقم الهاتف")
-            else { prefs.edit().putString("customer_name", n).putString("customer_phone", p).apply(); customerName = n; customerPhone = p; isAdmin = false; showHome() }
+            else { prefs.edit().putString("customer_name", n).putString("customer_phone", p).putBoolean("customer_session", true).apply(); customerName = n; customerPhone = p; isAdmin = false; showHome() }
         }, true), params(-1, dp(46)))
         body.addView(customer, params(-1))
         val admin = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(16), dp(16), dp(16)) }
@@ -133,6 +133,7 @@ class MainActivity : Activity() {
     private fun logout() {
         if (isAdmin) auth.signOut()
         isAdmin = false
+        prefs.edit().putBoolean("customer_session", false).apply()
         showLogin()
     }
 
