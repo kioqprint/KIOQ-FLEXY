@@ -58,14 +58,32 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        tickerText = prefs.getString("ticker", "مرحبا بكم في kioq flexy — فضاؤكم لخدمات التعبئة") ?: ""
+        tickerText = prefs.getString("ticker", "مرحبا بكم في kioq flexy — فضاء خدماتكم") ?: ""
         tickerSpeed = prefs.getInt("speed", 45)
-        imageUrls = (prefs.getString("images", "") ?: "").split("\n").filter { it.startsWith("http") || it.startsWith("content://") }.toMutableList()
+        imageUrls = (prefs.getString("images", "") ?: "").split("\\n").filter { it.startsWith("http") || it.startsWith("content://") }.toMutableList()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = 0xFFF4F7F8.toInt()
+        window.navigationBarColor = 0xFFF2F6FF.toInt()
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        if (prefs.getBoolean("customer_session", false)) { customerName = prefs.getString("customer_name", "") ?: ""; customerPhone = prefs.getString("customer_phone", "") ?: ""; showHome() } else showLogin()
+        val user = auth.currentUser
+        if (user == null) {
+            prefs.edit().putBoolean("customer_session", false).apply()
+            showLogin()
+        } else if (user.email.equals("KIOQ.STORE@gmail.com", true)) {
+            db.collection("users").document(user.uid).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.getString("role") == "admin") {
+                        isAdmin = true; customerName = "الإدارة"; customerPhone = ""; showHome()
+                    } else { auth.signOut(); showLogin() }
+                }
+                .addOnFailureListener { auth.signOut(); showLogin() }
+        } else {
+            isAdmin = false
+            customerName = user.displayName?.takeIf { it.isNotBlank() } ?: "زبون"
+            customerPhone = user.email?.substringBefore("@")?.removePrefix("customer_") ?: ""
+            if (customerPhone.startsWith("213") && customerPhone.length == 12) customerPhone = "0" + customerPhone.drop(3)
+            showHome()
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -83,7 +101,7 @@ class MainActivity : Activity() {
         TextView(this).apply {
             this.text = text; textSize = 14f; gravity = Gravity.CENTER
             setTextColor(if (primary) Color.WHITE else 0xFF24344B.toInt())
-            background = shape(if (primary) 0xFF176B63.toInt() else 0xFFEAF0F4.toInt(), 13)
+            background = shape(if (primary) 0xFF1769D2.toInt() else 0xFFEAF0F4.toInt(), 13)
             setPadding(dp(16), dp(10), dp(16), dp(10)); setOnClickListener { onClick() }
         }
 
@@ -92,34 +110,32 @@ class MainActivity : Activity() {
     private fun params(w: Int = -1, h: Int = -2) = LinearLayout.LayoutParams(w, h)
 
 
+    private fun normalizePhone(raw: String): String {
+        var digits = raw.filter { it.isDigit() }
+        if (digits.startsWith("00213")) digits = digits.drop(5)
+        else if (digits.startsWith("213") && digits.length == 12) digits = digits.drop(3)
+        else if (digits.startsWith("0")) digits = digits.drop(1)
+        return digits
+    }
+
+    private fun phoneLoginEmail(raw: String): String = "customer_" + normalizePhone(raw) + "@kioqflexy.app"
+
     private fun showLogin() {
-        val root = FrameLayout(this).apply { setBackgroundColor(0xFFF4F7F8.toInt()) }
+        val root = FrameLayout(this).apply { setBackgroundColor(0xFFF2F6FF.toInt()) }
         val body = column().apply { setPadding(dp(22), dp(32), dp(22), dp(24)) }
         val scroll = ScrollView(this); scroll.addView(body); root.addView(scroll)
-        body.addView(label("kioq flexy", 30f, 0xFF123B3A.toInt(), true).apply { gravity = Gravity.CENTER })
-        body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF74838E.toInt()).apply { gravity = Gravity.CENTER })
-        val card = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(18), dp(16), dp(16)) }
-        card.addView(label("مرحباً بك", 19f, 0xFF123B3A.toInt(), true))
-        card.addView(label("أدخل بيانات حسابك للمتابعة", 13f, 0xFF74838E.toInt()))
-        val name = EditText(this).apply {
-            hint = "الاسم الكامل"
-            setText(prefs.getString("customer_name", ""))
-            singleLine = true
-        }
-        val identity = EditText(this).apply {
-            hint = "رقم الهاتف أو البريد الإلكتروني"
-            setText(prefs.getString("customer_phone", ""))
-            singleLine = true
-        }
-        val password = EditText(this).apply {
-            hint = "كلمة المرور"
-            inputType = 129
-            singleLine = true
-        }
+        body.addView(label("kioq flexy", 30f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
+        body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF7486A4.toInt()).apply { gravity = Gravity.CENTER })
+        val card = column().apply { background = shape(Color.WHITE, 20); setPadding(dp(16), dp(18), dp(16), dp(16)); elevation = dp(3).toFloat() }
+        card.addView(label("مرحباً بك", 19f, 0xFF123B75.toInt(), true))
+        card.addView(label("أدخل رقم هاتفك وكلمة المرور", 13f, 0xFF7486A4.toInt()))
+        val name = EditText(this).apply { hint = "الاسم الكامل (للحساب الجديد)"; setText(prefs.getString("customer_name", "")); isSingleLine = true }
+        val identity = EditText(this).apply { hint = "رقم الهاتف أو البريد الإداري"; setText(prefs.getString("customer_phone", "")); isSingleLine = true }
+        val password = EditText(this).apply { hint = "كلمة المرور"; inputType = 129; isSingleLine = true }
         card.addView(name, params(-1, dp(50)))
         card.addView(identity, params(-1, dp(50)))
         card.addView(password, params(-1, dp(50)))
-        card.addView(button("متابعة", {
+        card.addView(button("تسجيل الدخول", {
             val id = identity.text.toString().trim()
             val pass = password.text.toString()
             if (id.contains("@")) {
@@ -128,51 +144,80 @@ class MainActivity : Activity() {
                 } else {
                     auth.signInWithEmailAndPassword(id, pass)
                         .addOnSuccessListener { result ->
-                            val signedEmail = result.user?.email.orEmpty()
-                            if (signedEmail.equals("KIOQ.STORE@gmail.com", true)) {
-                                prefs.edit().putBoolean("customer_session", false).apply()
-                                isAdmin = true
-                                customerName = "الإدارة"
-                                customerPhone = ""
-                                showHome()
-                            } else {
-                                auth.signOut()
-                                showMessage("تعذر الدخول. تحقق من بيانات الحساب.")
-                            }
+                            val uid = result.user?.uid ?: return@addOnSuccessListener
+                            db.collection("users").document(uid).get()
+                                .addOnSuccessListener { doc ->
+                                    if (doc.getString("role") == "admin") {
+                                        isAdmin = true; customerName = "الإدارة"; customerPhone = ""; showHome()
+                                    } else {
+                                        auth.signOut()
+                                        showMessage("تعذر الدخول. يرجى مراجعة بيانات الحساب.")
+                                    }
+                                }
+                                .addOnFailureListener { auth.signOut(); showMessage("تعذر التحقق من الحساب. حاول لاحقاً.") }
                         }
-                        .addOnFailureListener {
-                            showMessage("تعذر الدخول. تحقق من البريد وكلمة المرور.")
-                        }
+                        .addOnFailureListener { showMessage("تعذر الدخول. تحقق من البريد وكلمة المرور.") }
                 }
             } else {
-                val n = name.text.toString().trim()
-                if (n.isBlank() || id.length < 8) {
-                    showMessage("أدخل الاسم ورقم الهاتف بشكل صحيح.")
+                val phone = normalizePhone(id)
+                if (phone.length !in 9..10 || pass.length < 6) {
+                    showMessage("أدخل رقم هاتف صحيحاً وكلمة مرور من 6 أحرف على الأقل.")
                 } else {
-                    prefs.edit()
-                        .putString("customer_name", n)
-                        .putString("customer_phone", id)
-                        .putBoolean("customer_session", true)
-                        .apply()
-                    customerName = n
-                    customerPhone = id
-                    isAdmin = false
-                    showHome()
+                    auth.signInWithEmailAndPassword(phoneLoginEmail(id), pass)
+                        .addOnSuccessListener { result ->
+                            isAdmin = false
+                            customerName = result.user?.displayName?.takeIf { it.isNotBlank() } ?: "زبون"
+                            customerPhone = id
+                            prefs.edit().putString("customer_name", customerName).putString("customer_phone", id).apply()
+                            showHome()
+                        }
+                        .addOnFailureListener { showMessage("تعذر الدخول. تحقق من رقم الهاتف وكلمة المرور، أو أنشئ حساباً جديداً.") }
                 }
             }
-        }, true), params(-1, dp(48)).apply { topMargin = dp(12) })
+        }, true), params(-1, dp(46)).apply { topMargin = dp(12) })
+        card.addView(button("إنشاء حساب زبون جديد", {
+            val n = name.text.toString().trim()
+            val phoneText = identity.text.toString().trim()
+            val phone = normalizePhone(phoneText)
+            val pass = password.text.toString()
+            if (n.isBlank() || phone.length !in 9..10 || pass.length < 6 || phoneText.contains("@")) {
+                showMessage("أدخل الاسم ورقم الهاتف وكلمة مرور من 6 أحرف على الأقل.")
+            } else {
+                auth.createUserWithEmailAndPassword(phoneLoginEmail(phoneText), pass)
+                    .addOnSuccessListener { result ->
+                        val user = result.user ?: return@addOnSuccessListener
+                        val profile = com.google.firebase.auth.UserProfileChangeRequest.Builder().setDisplayName(n).build()
+                        user.updateProfile(profile).addOnCompleteListener {
+                            val data = hashMapOf<String, Any>(
+                                "name" to n,
+                                "phone" to phoneText,
+                                "role" to "customer",
+                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            )
+                            db.collection("users").document(user.uid).set(data)
+                                .addOnSuccessListener {
+                                    isAdmin = false; customerName = n; customerPhone = phoneText
+                                    prefs.edit().putString("customer_name", n).putString("customer_phone", phoneText).apply()
+                                    showHome()
+                                }
+                                .addOnFailureListener {
+                                    auth.signOut()
+                                    showMessage("تم إنشاء الحساب لكن تعذر حفظ الملف الشخصي. راجع إعدادات الأمان وحاول مجدداً.")
+                                }
+                        }
+                    }
+                    .addOnFailureListener { showMessage("لم نتمكن من إنشاء الحساب. قد يكون رقم الهاتف مسجلاً من قبل.") }
+            }
+        }), params(-1, dp(44)).apply { topMargin = dp(8) })
         body.addView(card, params(-1))
-        body.addView(label("إذا واجهت مشكلة في الدخول، تواصل مع المحل.", 11f, 0xFF7B8993.toInt()).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, 0)
-        })
+        body.addView(label("للمساعدة في الدخول، تواصل مع المحل.", 11f, 0xFF7B8993.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
         setContentView(root)
         root.alpha = 0f
         root.animate().alpha(1f).setDuration(220).start()
     }
 
     private fun logout() {
-        if (isAdmin) auth.signOut()
+        auth.signOut()
         isAdmin = false
         prefs.edit().putBoolean("customer_session", false).apply()
         showLogin()
@@ -193,27 +238,27 @@ class MainActivity : Activity() {
         top.addView(button("♧", { showMessage(if (french) "Aucune nouvelle notification" else "لا توجد تنبيهات جديدة") }), params(dp(40), dp(40)))
         top.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f))
         val brand = column().apply { gravity = Gravity.CENTER }
-        brand.addView(label("kioq flexy", 21f, 0xFF123B3A.toInt(), true).apply { gravity = Gravity.CENTER })
+        brand.addView(label("kioq flexy", 21f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
         brand.addView(label("KIOQ.STORE", 10f, 0xFF74838E.toInt(), true).apply { gravity = Gravity.CENTER })
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(button("☰", { openDrawer(frame) }), params(dp(44), dp(42)))
         page.addView(top)
 
         val welcome = column().apply {
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF123B3A.toInt(), 0xFF237D73.toInt())).apply { cornerRadius = dp(22).toFloat() }
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF123B75.toInt(), 0xFF1769D2.toInt())).apply { cornerRadius = dp(22).toFloat() }
             setPadding(dp(18), dp(18), dp(18), dp(18))
         }
-        welcome.addView(label(if (french) "Bienvenue sur" else "مرحباً بك في", 14f, 0xFFD5E9E5.toInt()))
+        welcome.addView(label(if (french) "Bienvenue sur" else "مرحباً بك في", 14f, 0xFFDCEAFF.toInt()))
         welcome.addView(label("kioq flexy", 26f, Color.WHITE, true))
         welcome.addView(label(if (french) "Gérez vos plateformes depuis un seul espace" else "كل منصاتك في فضاء واحد، بسهولة ووضوح", 13f, Color.WHITE))
         val wlp = params(); wlp.topMargin = dp(14); page.addView(welcome, wlp)
 
         val tickerFrame = FrameLayout(this).apply {
-            background = shape(0xFFE2F1ED.toInt(), 12)
+            background = shape(0xFFE5F0FF.toInt(), 12)
             clipChildren = false; clipToPadding = false
         }
         val ticker = TextView(this).apply {
-            text = tickerText; textSize = 14f; setTextColor(0xFF164D49.toInt())
+            text = tickerText; textSize = 14f; setTextColor(0xFF164A9A.toInt())
             setSingleLine(true); gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(12), 0)
         }
@@ -281,7 +326,7 @@ class MainActivity : Activity() {
         card.addView(label(p.name, 14f, 0xFF1E3044.toInt(), true).apply { gravity = Gravity.CENTER }, params(-1).apply { topMargin = dp(6) })
         card.addView(label(p.subtitle, 11f, 0xFF82909A.toInt()).apply { gravity = Gravity.CENTER })
         val balance = prefs.getString("balance_${p.name}", "غير مسجل") ?: "غير مسجل"
-        card.addView(label("الرصيد: $balance", 12f, 0xFF176B63.toInt(), true).apply { gravity = Gravity.CENTER })
+        card.addView(label("الرصيد: $balance", 12f, 0xFF1769D2.toInt(), true).apply { gravity = Gravity.CENTER })
         card.addView(button(if (french) "Voir le solde" else "عرض الرصيد", { openPlatform(p) }, true), params(-1, dp(32)).apply { topMargin = dp(6) })
         return card
     }
@@ -292,14 +337,14 @@ class MainActivity : Activity() {
         if (imageUrls.isEmpty()) {
             val placeholder = TextView(this).apply {
                 text = if (french) "Vos offres et annonces apparaîtront ici" else "مساحة إعلانات وعروض المحل — تُضاف الصور من لوحة الإدارة"
-                textSize = 12f; setTextColor(0xFF56716F.toInt()); gravity = Gravity.CENTER
-                background = shape(0xFFE5EFED.toInt(), 16); setPadding(dp(14), 0, dp(14), 0)
+                textSize = 12f; setTextColor(0xFF496A9C.toInt()); gravity = Gravity.CENTER
+                background = shape(0xFFEAF2FF.toInt(), 16); setPadding(dp(14), 0, dp(14), 0)
             }
             content.addView(placeholder, LinearLayout.LayoutParams(dp(290), dp(100)))
             return
         }
         imageUrls.forEachIndexed { index, uriText ->
-            val card = column().apply { background = shape(0xFFE5EFED.toInt(), 16); gravity = Gravity.CENTER }
+            val card = column().apply { background = shape(0xFFEAF2FF.toInt(), 16); gravity = Gravity.CENTER }
             val img = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
             card.addView(img, params(dp(260), dp(100)))
             val caption = prefs.getString("caption_$index", "") ?: ""
@@ -397,8 +442,8 @@ class MainActivity : Activity() {
         val panel = column().apply {
             setPadding(dp(18), dp(28), dp(18), dp(18)); background = shape(Color.WHITE, 0)
         }
-        panel.addView(label("kioq flexy", 24f, 0xFF14544D.toInt(), true))
-        panel.addView(label("KIOQ.STORE", 11f, 0xFF83918F.toInt()))
+        panel.addView(label("kioq flexy", 24f, 0xFF174A9A.toInt(), true))
+        panel.addView(label("KIOQ.STORE", 11f, 0xFF8294B5.toInt()))
         panel.addView(View(this).apply { setBackgroundColor(0xFFE8EEEE.toInt()) }, params(-1, dp(1)))
         val items = mutableListOf<Pair<String, () -> Unit>>()
         items.add("معلومات الحساب" to { showMessage("حساب KIOQ.STORE") })
@@ -484,7 +529,7 @@ class MainActivity : Activity() {
         val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
         val fields = platforms.map { p ->
             val input = EditText(this).apply { hint = "رصيد " + p.name; setText(prefs.getString("balance_" + p.name, "")); inputType = 8194 }
-            box.addView(label(p.name, 13f, 0xFF176B63.toInt(), true))
+            box.addView(label(p.name, 13f, 0xFF1769D2.toInt(), true))
             box.addView(input, params(-1, dp(48)))
             p.name to input
         }
@@ -550,7 +595,7 @@ class MainActivity : Activity() {
         val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
         val fields = imageUrls.mapIndexed { index, _ ->
             val input = EditText(this).apply { hint = "النص أسفل الصورة " + (index + 1); setText(prefs.getString("caption_" + index, "")) }
-            box.addView(label("الصورة " + (index + 1), 13f, 0xFF176B63.toInt(), true))
+            box.addView(label("الصورة " + (index + 1), 13f, 0xFF1769D2.toInt(), true))
             box.addView(input, params(-1, dp(48)))
             index to input
         }
