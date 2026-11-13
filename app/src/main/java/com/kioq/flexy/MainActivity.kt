@@ -93,21 +93,21 @@ class MainActivity : Activity() {
         webView?.destroy(); webView = null
         autoScroll = false
         val frame = FrameLayout(this).apply { setBackgroundColor(0xFFF4F7F8.toInt()) }
-        val page = column().apply { setPadding(dp(18), dp(18), dp(18), dp(12)) }
+        val page = column().apply { setPadding(dp(18), dp(8), dp(18), dp(12)) }
         val scroll = ScrollView(this)
         scroll.addView(page)
         frame.addView(scroll, FrameLayout.LayoutParams(-1, -1))
 
         val top = row()
-        val menu = button("☰", { openDrawer(frame) })
-        top.addView(menu, params(dp(44), dp(42)))
+        top.addView(button("ⓘ", { showInfo() }), params(dp(40), dp(40)))
+        top.addView(button(if (french) "ع" else "FR", { french = !french; showHome() }), params(dp(44), dp(40)))
+        top.addView(button("♧", { showMessage(if (french) "Aucune nouvelle notification" else "لا توجد تنبيهات جديدة") }), params(dp(40), dp(40)))
+        top.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f))
         val brand = column().apply { gravity = Gravity.CENTER }
-        brand.addView(label("kioq flexy", 23f, 0xFF123B3A.toInt(), true).apply { gravity = Gravity.CENTER })
+        brand.addView(label("kioq flexy", 21f, 0xFF123B3A.toInt(), true).apply { gravity = Gravity.CENTER })
         brand.addView(label("KIOQ.STORE", 10f, 0xFF74838E.toInt(), true).apply { gravity = Gravity.CENTER })
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(button("♧", { showMessage(if (french) "Aucune nouvelle notification" else "لا توجد تنبيهات جديدة") }))
-        top.addView(Space(this), params(dp(5), 1))
-        top.addView(button(if (french) "ع" else "FR", { french = !french; showHome() }))
+        top.addView(button("☰", { openDrawer(frame) }), params(dp(44), dp(42)))
         page.addView(top)
 
         val welcome = column().apply {
