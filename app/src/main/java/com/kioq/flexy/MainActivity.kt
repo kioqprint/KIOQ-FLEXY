@@ -1,6 +1,9 @@
 package com.kioqstore.flexy
 
 import android.app.Activity
+import androidx.core.view.WindowCompat
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import android.animation.ObjectAnimator
 import android.view.animation.LinearInterpolator
 import android.app.AlertDialog
@@ -37,6 +40,11 @@ class MainActivity : Activity() {
     private var imageStrip: HorizontalScrollView? = null
     private var imageStripContent: LinearLayout? = null
     private var autoScroll = false
+    private var isAdmin = false
+    private var customerName = ""
+    private var customerPhone = ""
+    private val auth by lazy { FirebaseAuth.getInstance() }
+    private val db by lazy { FirebaseFirestore.getInstance() }
 
     private data class Platform(val name: String, val subtitle: String, val url: String, val mark: String, val packageName: String? = null)
     private val platforms = listOf(
@@ -51,6 +59,10 @@ class MainActivity : Activity() {
         tickerText = prefs.getString("ticker", "مرحبا بكم في kioq flexy — فضاؤكم لخدمات التعبئة") ?: ""
         tickerSpeed = prefs.getInt("speed", 45)
         imageUrls = (prefs.getString("images", "") ?: "").split("\n").filter { it.startsWith("http") }.toMutableList()
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        window.statusBarColor = Color.WHITE
+        window.navigationBarColor = 0xFFF4F7F8.toInt()
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         showHome()
     }
 
