@@ -63,7 +63,7 @@ class MainActivity : Activity() {
         window.statusBarColor = Color.WHITE
         window.navigationBarColor = 0xFFF4F7F8.toInt()
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        showHome()
+        showLogin()
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -88,6 +88,51 @@ class MainActivity : Activity() {
     private fun column(): LinearLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun row(): LinearLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun params(w: Int = -1, h: Int = -2) = LinearLayout.LayoutParams(w, h)
+
+
+    private fun showLogin() {
+        val root = FrameLayout(this).apply { setBackgroundColor(0xFFF4F7F8.toInt()) }
+        val body = column().apply { setPadding(dp(22), dp(32), dp(22), dp(24)) }
+        val scroll = ScrollView(this); scroll.addView(body); root.addView(scroll)
+        body.addView(label("kioq flexy", 30f, 0xFF123B3A.toInt(), true).apply { gravity = Gravity.CENTER })
+        body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF74838E.toInt()).apply { gravity = Gravity.CENTER })
+        val customer = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(16), dp(16), dp(16)) }
+        customer.addView(label("دخول الزبون", 18f, 0xFF123B3A.toInt(), true))
+        val name = EditText(this).apply { hint = "الاسم الكامل"; setText(prefs.getString("customer_name", "")) }
+        val phone = EditText(this).apply { hint = "رقم الهاتف"; inputType = 3; setText(prefs.getString("customer_phone", "")) }
+        customer.addView(name, params(-1, dp(50))); customer.addView(phone, params(-1, dp(50)))
+        customer.addView(button("متابعة", {
+            val n = name.text.toString().trim(); val p = phone.text.toString().trim()
+            if (n.isBlank() || p.length < 8) showMessage("أدخل الاسم ورقم الهاتف")
+            else { prefs.edit().putString("customer_name", n).putString("customer_phone", p).apply(); customerName = n; customerPhone = p; isAdmin = false; showHome() }
+        }, true), params(-1, dp(46)))
+        body.addView(customer, params(-1))
+        val admin = column().apply { background = shape(Color.WHITE, 18); setPadding(dp(16), dp(16), dp(16), dp(16)) }
+        admin.addView(label("دخول الإدارة", 18f, 0xFF123B3A.toInt(), true))
+        val email = EditText(this).apply { hint = "البريد الإلكتروني"; setText("KIOQ.STORE@gmail.com") }
+        val pass = EditText(this).apply { hint = "كلمة المرور"; inputType = 129 }
+        admin.addView(email, params(-1, dp(50))); admin.addView(pass, params(-1, dp(50)))
+        admin.addView(button("دخول الإدارة", {
+            if (!email.text.toString().trim().equals("KIOQ.STORE@gmail.com", true) || pass.text.isNullOrBlank()) showMessage("تحقق من البريد وكلمة المرور")
+            else auth.signInWithEmailAndPassword(email.text.toString().trim(), pass.text.toString())
+                .addOnSuccessListener { result ->
+                    val uid = result.user?.uid ?: return@addOnSuccessListener
+                    db.collection("users").document(uid).get().addOnSuccessListener { doc ->
+                        if (doc.getString("role") == "admin") { isAdmin = true; customerName = "الإدارة"; showHome() }
+                        else { auth.signOut(); showMessage("الحساب لا يملك صلاحية الإدارة. يجب ضبط role=admin في Firestore.") }
+                    }.addOnFailureListener { auth.signOut(); showMessage("تعذر التحقق من الصلاحيات") }
+                }.addOnFailureListener { showMessage("حساب الإدارة غير منشأ أو كلمة المرور غير صحيحة في Firebase Auth") }
+        }, true), params(-1, dp(46)))
+        body.addView(admin, params(-1).apply { topMargin = dp(14) })
+        body.addView(label("حساب الزبون محفوظ محلياً على هذا الهاتف. حساب الإدارة يستعمل Firebase.", 11f, 0xFF7B8993.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
+        setContentView(root); root.alpha = 0f; root.animate().alpha(1f).setDuration(220).start()
+    }
+
+    private fun logout() {
+        if (isAdmin) auth.signOut()
+        isAdmin = false
+        showLogin()
+    }
 
     private fun showHome() {
         webView?.destroy(); webView = null
