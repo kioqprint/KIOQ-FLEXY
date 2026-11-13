@@ -320,7 +320,7 @@ class MainActivity : Activity() {
         val logoUrl = when (p.name) {
             "FAWRIMOB" -> "https://fawrimob.com/favicon.ico"
             "ALAADZ" -> "https://alaadz.com/favicon.ico"
-            "GIFTY" -> "https://gifty-dz.com/favicon.ico"
+            "GIFTY" -> "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a8/49/a2/a849a2ac-73bb-e0ae-5d7c-4f7851d6dc8e/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.webp"
             else -> "https://oneclickdz.com/favicon.ico"
         }
         thread {
