@@ -75,7 +75,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         tickerText = prefs.getString("ticker", "مرحبا بكم في kioq flexy — فضاء خدماتكم") ?: ""
         tickerSpeed = prefs.getInt("speed", 45)
-        imageUrls = (prefs.getString("images", "") ?: "").split("\\n").filter { it.startsWith("http") || it.startsWith("content://") }.toMutableList()
+        imageUrls = (prefs.getString("images", "") ?: "").split("\n").filter { it.startsWith("http") || it.startsWith("content://") }.toMutableList()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = 0xFFF2F6FF.toInt()
