@@ -1,4 +1,4 @@
-package com.kioq.flexy
+package com.kioqstore.flexy
 
 import android.app.Activity
 import android.os.Bundle
@@ -16,7 +16,6 @@ class MainActivity : Activity() {
     private var french = false
 
     private data class Platform(val name: String, val url: String, val packageName: String? = null)
-    // Replace the two pending URLs after receiving the official addresses.
     private val platforms = listOf(
         Platform("FAWRIMOB", "https://fawrimob.com"),
         Platform("ALAADZ", "https://alaadz.com"),
@@ -80,7 +79,6 @@ class MainActivity : Activity() {
         }
         setContentView(root)
     }
-
 
     private fun openGifty(packageName: String) {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
