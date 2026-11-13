@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.kioq.flexy"
+    namespace = "com.kioqstore.flexy"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.kioq.flexy"
+        applicationId = "com.kioqstore.flexy"
         minSdk = 23
         targetSdk = 35
         versionCode = 1
