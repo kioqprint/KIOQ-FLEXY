@@ -1,42 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
     function isAdmin() {
-      return signedIn() && request.auth.token.email in ['kioq.store@gmail.com', 'KIOQ.STORE@gmail.com'];
+      return request.auth != null
+        && request.auth.token.email == 'kioq.store@gmail.com';
     }
 
-    match /users/{userId} {
-      allow create: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.role == 'customer'
-        && request.resource.data.keys().hasOnly(['name', 'phone', 'role', 'createdAt']);
-      allow read: if signedIn()
-        && (request.auth.uid == userId || isAdmin());
-      allow update: if (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']))
-        || (signedIn()
-          && request.auth.uid == userId
-          && resource.data.role == 'customer'
-          && request.resource.data.role == 'customer'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone']));
-      allow delete: if false;
-    }
-
+    // Public app content: everyone can read, only the administrator can change it.
     match /app_config/{configId} {
-      allow read: if signedIn();
+      allow read: if configId == 'main';
       allow create, update, delete: if isAdmin() && configId == 'main';
     }
 
     match /announcements/{announcementId} {
-      allow read: if signedIn() && (isAdmin() || resource.data.active == true);
+      allow read: if resource.data.active == true || isAdmin();
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly(['title', 'message', 'active', 'createdAt'])
         && request.resource.data.title is string
-        && request.resource.data.message is string;
+        && request.resource.data.message is string
+        && request.resource.data.active is bool;
       allow update, delete: if isAdmin();
+    }
+
+    // Customer profiles are disabled; this app no longer creates customer accounts.
+    match /users/{userId} {
+      allow read, write: if false;
     }
   }
 }
