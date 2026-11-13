@@ -7,7 +7,6 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.storage.FirebaseStorage
 import android.text.TextWatcher
 import android.text.Editable
 import java.text.SimpleDateFormat
@@ -81,23 +80,11 @@ class MainActivity : Activity() {
         window.navigationBarColor = 0xFFF2F6FF.toInt()
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         val user = auth.currentUser
-        if (user == null) {
-            prefs.edit().putBoolean("customer_session", false).apply()
-            showLogin()
-        } else if (user.email.equals("KIOQ.STORE@gmail.com", true)) {
-            // The dedicated administrator is authenticated by Firebase Auth.
-            // Do not require a Firestore role document for the first admin login.
-            isAdmin = true
-            customerName = "الإدارة"
-            customerPhone = ""
-            showHome()
-        } else {
-            isAdmin = false
-            customerName = user.displayName?.takeIf { it.isNotBlank() } ?: "زبون"
-            customerPhone = user.email?.substringBefore("@")?.removePrefix("customer_") ?: ""
-            if (customerPhone.startsWith("213") && customerPhone.length == 12) customerPhone = "0" + customerPhone.drop(3)
-            showHome()
-        }
+        isAdmin = user?.email.equals("kioq.store@gmail.com", true)
+        if (!isAdmin && user != null) auth.signOut()
+        customerName = if (isAdmin) "الإدارة" else ""
+        customerPhone = ""
+        showHome()
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -223,15 +210,68 @@ class MainActivity : Activity() {
         root.animate().alpha(1f).setDuration(220).start()
     }
 
+    private fun showAdminLogin() {
+        if (isAdmin && auth.currentUser?.email.equals("kioq.store@gmail.com", true)) {
+            showAdminDashboard()
+            return
+        }
+        val email = EditText(this).apply {
+            hint = "البريد الإلكتروني"
+            setText("KIOQ.STORE@gmail.com")
+            isSingleLine = true
+            inputType = 33
+        }
+        val password = EditText(this).apply {
+            hint = "كلمة المرور"
+            inputType = 129
+            isSingleLine = true
+        }
+        val box = column().apply {
+            setPadding(dp(12), dp(6), dp(12), dp(2))
+            addView(email, params(-1, dp(50)))
+            addView(password, params(-1, dp(50)))
+        }
+        AlertDialog.Builder(this).setTitle("دخول الإدارة").setView(box)
+            .setPositiveButton("دخول", null).setNegativeButton("إلغاء", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val enteredEmail = email.text.toString().trim()
+                        val pass = password.text.toString()
+                        if (!enteredEmail.equals("kioq.store@gmail.com", true) || pass.isBlank()) {
+                            showMessage("بيانات الإدارة غير صحيحة")
+                            return@setOnClickListener
+                        }
+                        auth.signInWithEmailAndPassword("KIOQ.STORE@gmail.com", pass)
+                            .addOnSuccessListener { result ->
+                                if (!result.user?.email.equals("kioq.store@gmail.com", true)) {
+                                    auth.signOut()
+                                    showMessage("هذا الحساب غير مخوّل للإدارة")
+                                } else {
+                                    isAdmin = true
+                                    customerName = "الإدارة"
+                                    dialog.dismiss()
+                                    loadCloudSettings()
+                                    showAdminDashboard()
+                                }
+                            }
+                            .addOnFailureListener { showMessage("تعذر الدخول. تحقق من البريد وكلمة المرور.") }
+                    }
+                }
+                dialog.show()
+            }
+    }
+
     private fun logout() {
         auth.signOut()
         isAdmin = false
-        prefs.edit().putBoolean("customer_session", false).apply()
-        showLogin()
+        customerName = ""
+        customerPhone = ""
+        showHome()
     }
 
     private fun showHome() {
-        if (!cloudSettingsLoaded && auth.currentUser != null) loadCloudSettings()
+        if (!cloudSettingsLoaded) loadCloudSettings()
         webView?.destroy(); webView = null
         autoScroll = false
         val frame = FrameLayout(this).apply { setBackgroundColor(0xFFF2F6FF.toInt()) }
@@ -244,6 +284,7 @@ class MainActivity : Activity() {
         top.addView(button("ⓘ", { showInfo() }), params(dp(40), dp(40)))
         top.addView(button(if (french) "ع" else "FR", { french = !french; showHome() }), params(dp(44), dp(40)))
         top.addView(button("♧", { showNotifications() }), params(dp(40), dp(40)))
+        top.addView(button("🔒", { showAdminLogin() }), params(dp(40), dp(40)))
         top.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f))
         val brand = column().apply { gravity = Gravity.CENTER }
         brand.addView(label("kioq flexy", 21f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
@@ -460,16 +501,16 @@ class MainActivity : Activity() {
         panel.addView(label("KIOQ.STORE", 11f, 0xFF526783.toInt()))
         panel.addView(View(this).apply { setBackgroundColor(0xFFE8EEEE.toInt()) }, params(-1, dp(1)))
         val items = mutableListOf<Pair<String, () -> Unit>>()
-        items.add("معلومات الحساب" to { showAccountInfo() })
         if (isAdmin) {
             items.add("لوحة الإدارة" to { showAdminDashboard() })
-            items.add("زبائني" to { showCustomers() })
+            items.add("تسجيل خروج الإدارة" to { logout() })
+        } else {
+            items.add("دخول الإدارة" to { showAdminLogin() })
         }
         items.add("المنصات" to { showHome() })
         items.add("التنبيهات" to { showNotifications() })
         items.add("التنزيلات والتحديثات" to { showMessage("نسخة التطبيق الحالية 1.0.0") })
         items.add("وسائل الاتصال" to { showContacts() })
-        items.add("تسجيل الخروج" to { logout() })
         items.forEach { (name, action) ->
             val item = button("  $name", { closeDrawer(frame); action() })
             item.gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -583,14 +624,37 @@ class MainActivity : Activity() {
 
     private fun editImages() {
         if (!requireAdmin()) return
-        val options = arrayOf("إضافة صور من الهاتف", "تعديل أوصاف الصور", "حذف صورة")
+        val options = arrayOf("إضافة صورة برابط", "تعديل أوصاف الصور", "حذف صورة")
         AlertDialog.Builder(this).setTitle("إدارة صور البانر").setItems(options) { _, which ->
             when (which) {
-                0 -> pickBannerImages()
+                0 -> addBannerByUrl()
                 1 -> if (imageUrls.isEmpty()) showMessage("لا توجد صور حالياً") else editBannerCaptions()
                 2 -> deleteBannerImage()
             }
         }.show()
+    }
+
+    private fun addBannerByUrl() {
+        if (!requireAdmin()) return
+        val url = EditText(this).apply {
+            hint = "https://example.com/banner.jpg"
+            inputType = 17
+            isSingleLine = true
+        }
+        AlertDialog.Builder(this).setTitle("رابط صورة البانر").setMessage("أضف رابط صورة متاحاً عبر الإنترنت. رفع الصور مباشرة من الهاتف غير متاح لأننا لن نفعّل التخزين المدفوع.")
+            .setView(url).setPositiveButton("إضافة") { _, _ ->
+                val value = url.text.toString().trim()
+                if (!(value.startsWith("https://") || value.startsWith("http://"))) {
+                    showMessage("أدخل رابط صورة صحيحاً يبدأ بـ http أو https")
+                    return@setPositiveButton
+                }
+                imageUrls.add(value)
+                imageCaptions.add("")
+                saveBannersToCloud {
+                    renderImageBanners()
+                    showMessage("تمت إضافة رابط الصورة")
+                }
+            }.setNegativeButton("إلغاء", null).show()
     }
 
     private fun pickBannerImages() {
@@ -702,36 +766,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun uploadBannerUris(uris: List<Uri>) {
-        if (!requireAdmin()) return
-        if (uris.isEmpty()) return
-        val uploaded = mutableListOf<String>()
-        var completed = 0
-        var failed = false
-        uris.forEachIndexed { index, uri ->
-            val ref = FirebaseStorage.getInstance().reference.child("banners/" + System.currentTimeMillis() + "_" + index + ".jpg")
-            ref.putFile(uri).continueWithTask { task ->
-                if (!task.isSuccessful) throw (task.exception ?: Exception("Upload failed"))
-                ref.downloadUrl
-            }.addOnSuccessListener { downloadUri ->
-                if (failed) return@addOnSuccessListener
-                uploaded.add(downloadUri.toString())
-                completed++
-                if (completed == uris.size) {
-                    imageUrls.addAll(uploaded)
-                    imageCaptions.addAll(List(uploaded.size) { "" })
-                    saveBannersToCloud {
-                        renderImageBanners()
-                        showMessage("تم رفع الصور وحفظها بنجاح")
-                        editBannerCaptions()
-                    }
-                }
-            }.addOnFailureListener { error ->
-                failed = true
-                showMessage("تعذر رفع إحدى الصور: " + (error.localizedMessage ?: "تحقق من قواعد Firebase Storage"))
-            }
-        }
-    }
+
 
     private fun deleteBannerImage() {
         if (imageUrls.isEmpty()) { showMessage("لا توجد صور لحذفها"); return }
@@ -786,19 +821,12 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(16))
         }
         intro.addView(label("مرحباً بك في لوحة الإدارة", 18f, Color.WHITE, true))
-        intro.addView(label("إدارة موحدة لإعدادات التطبيق ومحتواه والزبائن", 12f, 0xFFDCEAFF.toInt()))
+        intro.addView(label("إدارة المنصات ومحتوى التطبيق وإعداداته", 12f, 0xFFDCEAFF.toInt()))
         body.addView(intro)
-        val stats = label("جاري تحميل إحصائيات الزبائن...", 13f, 0xFF526783.toInt())
-        val statLp = params(); statLp.topMargin = dp(10); body.addView(stats, statLp)
-        db.collection("users").get().addOnSuccessListener { result ->
-            if (!isFinishing) stats.text = "عدد حسابات الزبائن المسجلة: " + result.size()
-        }.addOnFailureListener { if (!isFinishing) stats.text = "تعذر تحميل عدد الزبائن — تحقق من صلاحيات Firestore" }
-        body.addView(label("إدارة الحسابات", 15f, 0xFF24344B.toInt(), true).apply { setPadding(0, dp(14), 0, dp(2)) })
-        adminOption(body, "زبائني", "عرض الحسابات والبحث عن زبون ومراجعة بياناته", { showCustomers() })
         body.addView(label("إدارة التطبيق", 15f, 0xFF24344B.toInt(), true).apply { setPadding(0, dp(14), 0, dp(2)) })
         adminOption(body, "المنصات", "إظهار أو إخفاء FAWRIMOB وALAADZ وGIFTY وONECLICK", { editPlatformVisibility() })
         adminOption(body, "الشريط الكتابي", "تعديل نص الإعلان وسرعة الحركة", { editTickerAndSpeed() })
-        adminOption(body, "صور البانر", "رفع صور من الهاتف وتعديل أوصافها وحذفها", { editImages() })
+        adminOption(body, "صور البانر", "إضافة روابط صور خارجية وتعديل أوصافها وحذفها (دون Firebase Storage)", { editImages() })
         adminOption(body, "معلومات المحل", "تعديل الاسم والتعريف وأرقام الاتصال والبريد والرابط", { editShopProfile() })
         adminOption(body, "التنبيهات والإعلانات", "نشر تنبيه يظهر للزبائن داخل التطبيق", { showNotifications() })
         adminOption(body, "معاينة واجهة الزبون", "العودة إلى الصفحة الرئيسية كما يراها الزبون", { showHome() })
