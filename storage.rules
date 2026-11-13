@@ -5,7 +5,7 @@ service firebase.storage {
       return request.auth != null;
     }
     function isAdmin() {
-      return signedIn() && request.auth.token.email == 'kioq.store@gmail.com';
+      return signedIn() && request.auth.token.email in ['kioq.store@gmail.com', 'KIOQ.STORE@gmail.com'];
     }
     match /banners/{allPaths=**} {
       allow read: if signedIn();
