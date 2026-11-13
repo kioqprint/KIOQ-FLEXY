@@ -111,105 +111,6 @@ class MainActivity : Activity() {
     private fun params(w: Int = -1, h: Int = -2) = LinearLayout.LayoutParams(w, h)
 
 
-    private fun normalizePhone(raw: String): String {
-        var digits = raw.filter { it.isDigit() }
-        if (digits.startsWith("00213")) digits = digits.drop(5)
-        else if (digits.startsWith("213") && digits.length == 12) digits = digits.drop(3)
-        else if (digits.startsWith("0")) digits = digits.drop(1)
-        return digits
-    }
-
-    private fun phoneLoginEmail(raw: String): String = "customer_" + normalizePhone(raw) + "@kioqflexy.app"
-
-    private fun showLogin() {
-        val root = FrameLayout(this).apply { setBackgroundColor(0xFFF2F6FF.toInt()) }
-        val body = column().apply { setPadding(dp(22), dp(32), dp(22), dp(24)) }
-        val scroll = ScrollView(this); scroll.addView(body); root.addView(scroll)
-        body.addView(label("kioq flexy", 30f, 0xFF123B75.toInt(), true).apply { gravity = Gravity.CENTER })
-        body.addView(label("فضاء KIOQ.STORE", 14f, 0xFF526783.toInt()).apply { gravity = Gravity.CENTER })
-        val card = column().apply { background = shape(Color.WHITE, 20); setPadding(dp(16), dp(18), dp(16), dp(16)); elevation = dp(3).toFloat() }
-        card.addView(label("مرحباً بك", 19f, 0xFF123B75.toInt(), true))
-        card.addView(label("أدخل رقم هاتفك وكلمة المرور", 13f, 0xFF7486A4.toInt()))
-        val name = EditText(this).apply { hint = "الاسم الكامل (للحساب الجديد)"; setText(prefs.getString("customer_name", "")); isSingleLine = true }
-        val identity = EditText(this).apply { hint = "رقم الهاتف"; setText(prefs.getString("customer_phone", "")); isSingleLine = true }
-        val password = EditText(this).apply { hint = "كلمة المرور"; inputType = 129; isSingleLine = true }
-        card.addView(name, params(-1, dp(50)))
-        card.addView(identity, params(-1, dp(50)))
-        card.addView(password, params(-1, dp(50)))
-        card.addView(button("تسجيل الدخول", {
-            val id = identity.text.toString().trim()
-            val pass = password.text.toString()
-            if (id.contains("@")) {
-                if (!id.equals("KIOQ.STORE@gmail.com", true) || pass.isBlank()) {
-                    showMessage("تعذر الدخول. تحقق من بيانات الحساب.")
-                } else {
-                    auth.signInWithEmailAndPassword("KIOQ.STORE@gmail.com", pass)
-                        .addOnSuccessListener {
-                            isAdmin = true
-                            customerName = "الإدارة"
-                            customerPhone = ""
-                            showHome()
-                        }
-                        .addOnFailureListener { showMessage("تعذر الدخول. تحقق من بيانات الحساب.") }
-                }
-            } else {
-                val phone = normalizePhone(id)
-                if (phone.length !in 9..10 || pass.length < 6) {
-                    showMessage("أدخل رقم هاتف صحيحاً وكلمة مرور من 6 أحرف على الأقل.")
-                } else {
-                    auth.signInWithEmailAndPassword(phoneLoginEmail(id), pass)
-                        .addOnSuccessListener { result ->
-                            isAdmin = false
-                            customerName = result.user?.displayName?.takeIf { it.isNotBlank() } ?: "زبون"
-                            customerPhone = id
-                            prefs.edit().putString("customer_name", customerName).putString("customer_phone", id).apply()
-                            showHome()
-                        }
-                        .addOnFailureListener { showMessage("تعذر الدخول. تحقق من رقم الهاتف وكلمة المرور، أو أنشئ حساباً جديداً.") }
-                }
-            }
-        }, true), params(-1, dp(46)).apply { topMargin = dp(12) })
-        card.addView(button("إنشاء حساب زبون جديد", {
-            val n = name.text.toString().trim()
-            val phoneText = identity.text.toString().trim()
-            val phone = normalizePhone(phoneText)
-            val pass = password.text.toString()
-            if (n.isBlank() || phone.length !in 9..10 || pass.length < 6 || phoneText.contains("@")) {
-                showMessage("أدخل الاسم ورقم الهاتف وكلمة مرور من 6 أحرف على الأقل.")
-            } else {
-                auth.createUserWithEmailAndPassword(phoneLoginEmail(phoneText), pass)
-                    .addOnSuccessListener { result ->
-                        val user = result.user ?: return@addOnSuccessListener
-                        val profile = com.google.firebase.auth.UserProfileChangeRequest.Builder().setDisplayName(n).build()
-                        user.updateProfile(profile).addOnCompleteListener {
-                            val data = hashMapOf<String, Any>(
-                                "name" to n,
-                                "phone" to phoneText,
-                                "role" to "customer",
-                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                            )
-                            db.collection("users").document(user.uid).set(data)
-                                .addOnSuccessListener {
-                                    isAdmin = false; customerName = n; customerPhone = phoneText
-                                    prefs.edit().putString("customer_name", n).putString("customer_phone", phoneText).apply()
-                                    showHome()
-                                }
-                                .addOnFailureListener {
-                                    auth.signOut()
-                                    showMessage("تم إنشاء الحساب لكن تعذر حفظ الملف الشخصي. راجع إعدادات الأمان وحاول مجدداً.")
-                                }
-                        }
-                    }
-                    .addOnFailureListener { showMessage("لم نتمكن من إنشاء الحساب. قد يكون رقم الهاتف مسجلاً من قبل.") }
-            }
-        }), params(-1, dp(44)).apply { topMargin = dp(8) })
-        body.addView(card, params(-1))
-        body.addView(label("للمساعدة في الدخول، تواصل مع المحل.", 11f, 0xFF7B8993.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
-        setContentView(root)
-        root.alpha = 0f
-        root.animate().alpha(1f).setDuration(220).start()
-    }
-
     private fun showAdminLogin() {
         if (isAdmin && auth.currentUser?.email.equals("kioq.store@gmail.com", true)) {
             showAdminDashboard()
@@ -657,26 +558,6 @@ class MainActivity : Activity() {
             }.setNegativeButton("إلغاء", null).show()
     }
 
-    private fun pickBannerImages() {
-        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE); type = "image/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
-        startActivityForResult(pick, 2401)
-    }
-
-    @Deprecated("Deprecated in Android")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != 2401 || resultCode != RESULT_OK || data == null) return
-        val selected = mutableListOf<Uri>()
-        data.clipData?.let { clip -> for (i in 0 until clip.itemCount) selected.add(clip.getItemAt(i).uri) }
-        if (selected.isEmpty()) data.data?.let { selected.add(it) }
-        selected.forEach { uri -> try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { } }
-        uploadBannerUris(selected)
-    }
-
     private fun editBannerCaptions() {
         if (!requireAdmin()) return
         val box = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
@@ -830,71 +711,6 @@ class MainActivity : Activity() {
         adminOption(body, "معلومات المحل", "تعديل الاسم والتعريف وأرقام الاتصال والبريد والرابط", { editShopProfile() })
         adminOption(body, "التنبيهات والإعلانات", "نشر تنبيه يظهر للزبائن داخل التطبيق", { showNotifications() })
         adminOption(body, "معاينة واجهة الزبون", "العودة إلى الصفحة الرئيسية كما يراها الزبون", { showHome() })
-    }
-
-    private fun showCustomers() {
-        if (!requireAdmin()) return
-        val body = beginPage("إدارة الزبائن") { showAdminDashboard() }
-        val search = EditText(this).apply { hint = "ابحث بالاسم أو رقم الهاتف"; isSingleLine = true }
-        body.addView(search, params(-1, dp(50)))
-        val count = label("جاري تحميل الزبائن...", 12f, 0xFF60748F.toInt())
-        body.addView(count)
-        val list = column()
-        body.addView(list)
-        db.collection("users").get().addOnSuccessListener { result ->
-            val docs = result.documents.sortedByDescending { it.getTimestamp("createdAt")?.toDate()?.time ?: 0L }
-            fun render(query: String) {
-                list.removeAllViews()
-                val filtered = docs.filter { doc ->
-                    val name = doc.getString("name") ?: ""
-                    val phone = doc.getString("phone") ?: ""
-                    name.contains(query, true) || phone.contains(query, true)
-                }
-                count.text = "عدد النتائج: " + filtered.size + " من " + docs.size
-                if (filtered.isEmpty()) {
-                    list.addView(label("لا توجد حسابات مطابقة", 13f, 0xFF60748F.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, dp(24), 0, dp(24)) })
-                }
-                filtered.forEach { doc ->
-                    val name = doc.getString("name") ?: "زبون دون اسم"
-                    val phone = doc.getString("phone") ?: "غير مسجل"
-                    val item = column().apply { background = shape(Color.WHITE, 14, 0xFFE0E9F5.toInt()); setPadding(dp(12), dp(9), dp(12), dp(9)) }
-                    item.addView(label(name, 14f, 0xFF174A9A.toInt(), true))
-                    item.addView(label(phone, 12f, 0xFF60748F.toInt()))
-                    val created = doc.getTimestamp("createdAt")?.toDate()
-                    if (created != null) item.addView(label("تاريخ التسجيل: " + SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(created), 10f, 0xFF8090A5.toInt()))
-                    item.setOnClickListener { showCustomerDetails(doc.id, name, phone, created) }
-                    val lp = params(-1); lp.topMargin = dp(7); list.addView(item, lp)
-                }
-            }
-            render("")
-            search.addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, countValue: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, countValue: Int) { render(s?.toString() ?: "") }
-                override fun afterTextChanged(s: Editable?) {}
-            })
-        }.addOnFailureListener { count.text = "تعذر تحميل الزبائن. تأكد من نشر قواعد Firestore الجديدة." }
-    }
-
-    private fun showCustomerDetails(uid: String, name: String, phone: String, created: Date?) {
-        val message = "الاسم: " + name + "\nرقم الهاتف: " + phone + "\nمعرف الحساب: " + uid +
-            (if (created != null) "\nتاريخ التسجيل: " + SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(created) else "")
-        AlertDialog.Builder(this).setTitle("بيانات الزبون").setMessage(message)
-            .setNeutralButton("اتصال") { _, _ -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))) }
-            .setPositiveButton("تعديل الاسم") { _, _ -> editCustomerName(uid, name) }
-            .setNegativeButton("إغلاق", null).show()
-    }
-
-    private fun editCustomerName(uid: String, oldName: String) {
-        if (!requireAdmin()) return
-        val input = EditText(this).apply { setText(oldName); hint = "اسم الزبون" }
-        AlertDialog.Builder(this).setTitle("تعديل اسم الزبون").setView(input)
-            .setPositiveButton("حفظ") { _, _ ->
-                val value = input.text.toString().trim()
-                if (value.isBlank()) { showMessage("الاسم لا يمكن أن يكون فارغاً"); return@setPositiveButton }
-                db.collection("users").document(uid).update("name", value)
-                    .addOnSuccessListener { showMessage("تم تحديث الاسم"); showCustomers() }
-                    .addOnFailureListener { showMessage("تعذر تعديل الاسم. تحقق من قواعد Firestore.") }
-            }.setNegativeButton("إلغاء", null).show()
     }
 
     private fun editShopProfile() {
