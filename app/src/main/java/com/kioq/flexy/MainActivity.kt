@@ -270,7 +270,7 @@ class MainActivity : Activity() {
 
         val title = label(if (french) "Vos plateformes" else "منصاتك", 18f, 0xFF24344B.toInt(), true)
         val titleLp = params(); titleLp.topMargin = dp(20); page.addView(title, titleLp)
-        page.addView(label(if (french) "Choisissez une plateforme pour consulter votre espace" else "اختر المنصة لعرض حسابك ورصيدك", 12f, 0xFF526783.toInt()))
+        page.addView(label(if (french) "Choisissez une plateforme pour consulter votre espace" else "اختر المنصة للدخول إلى حسابك", 12f, 0xFF526783.toInt()))
         val visiblePlatforms = platforms.filter { prefs.getBoolean("platform_visible_${it.name}", true) }
         visiblePlatforms.chunked(2).forEach { pair ->
             val line = row()
@@ -311,12 +311,6 @@ class MainActivity : Activity() {
         }
         val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setPadding(dp(5), dp(5), dp(5), dp(5)); background = shape(0xFFF5F8F8.toInt(), 14) }
         card.addView(logo, params(dp(52), dp(52)))
-        val domain = when (p.name) {
-            "FAWRIMOB" -> "fawrimob.com"
-            "ALAADZ" -> "alaadz.com"
-            "GIFTY" -> "play.google.com"
-            else -> "oneclickdz.com"
-        }
         val logoUrl = when (p.name) {
             "FAWRIMOB" -> "https://fawrimob.com/favicon.ico"
             "ALAADZ" -> "https://alaadz.com/favicon.ico"
@@ -331,7 +325,6 @@ class MainActivity : Activity() {
         }
         card.addView(label(p.name, 14f, 0xFF1E3044.toInt(), true).apply { gravity = Gravity.CENTER }, params(-1).apply { topMargin = dp(6) })
         card.addView(label(p.subtitle, 11f, 0xFF526783.toInt()).apply { gravity = Gravity.CENTER })
-        val balance = prefs.getString("balance_${p.name}", "غير مسجل") ?: "غير مسجل"
         card.addView(button(if (french) "Ouvrir" else "فتح المنصة", { openPlatform(p) }, true), params(-1, dp(34)).apply { topMargin = dp(8) })
         return card
     }
