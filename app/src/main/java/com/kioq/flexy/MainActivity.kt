@@ -15,12 +15,12 @@ class MainActivity : Activity() {
     private var webView: WebView? = null
     private var french = false
 
-    private data class Platform(val name: String, val url: String)
+    private data class Platform(val name: String, val url: String, val packageName: String? = null)
     // Replace the two pending URLs after receiving the official addresses.
     private val platforms = listOf(
         Platform("FAWRIMOB", "https://fawrimob.com"),
         Platform("ALAADZ", "https://alaadz.com"),
-        Platform("GIFTY", ""),
+        Platform("GIFTY", "", "com.gifty.pro.android"),
         Platform("ONECLICK", "https://oneclickdz.com/ar")
     )
 
@@ -69,7 +69,8 @@ class MainActivity : Activity() {
                 textSize = 17f
                 isAllCaps = false
                 setOnClickListener {
-                    if (platform.url.isNotBlank()) openPlatform(platform)
+                    if (platform.packageName != null) openGifty(platform.packageName)
+                    else if (platform.url.isNotBlank()) openPlatform(platform)
                     else showMessage(if (french) "Adresse officielle à ajouter" else "نحتاج إلى الرابط الرسمي لهذه المنصة")
                 }
             }
@@ -78,6 +79,28 @@ class MainActivity : Activity() {
             ).apply { setMargins(0, 9, 0, 9) })
         }
         setContentView(root)
+    }
+
+
+    private fun openGifty(packageName: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        if (launchIntent != null) {
+            startActivity(launchIntent)
+        } else {
+            val marketIntent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("market://details?id=$packageName")
+            )
+            try {
+                startActivity(marketIntent)
+            } catch (_: android.content.ActivityNotFoundException) {
+                val webIntent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                )
+                startActivity(webIntent)
+            }
+        }
     }
 
     private fun showMessage(message: String) {
