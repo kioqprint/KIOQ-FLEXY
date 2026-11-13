@@ -1,6 +1,8 @@
 package com.kioqstore.flexy
 
 import android.app.Activity
+import android.animation.ObjectAnimator
+import android.view.animation.LinearInterpolator
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -31,6 +33,7 @@ class MainActivity : Activity() {
     private var tickerSpeed = 45
     private var imageUrls = mutableListOf<String>()
     private var tickerView: TextView? = null
+    private var tickerAnimator: ObjectAnimator? = null
     private var imageStrip: HorizontalScrollView? = null
     private var imageStripContent: LinearLayout? = null
     private var autoScroll = false
@@ -104,14 +107,19 @@ class MainActivity : Activity() {
         welcome.addView(label(if (french) "Gérez vos plateformes depuis un seul espace" else "كل منصاتك في فضاء واحد، بسهولة ووضوح", 13f, Color.WHITE))
         val wlp = params(); wlp.topMargin = dp(14); page.addView(welcome, wlp)
 
+        val tickerFrame = FrameLayout(this).apply {
+            background = shape(0xFFE2F1ED.toInt(), 12)
+            clipChildren = false; clipToPadding = false
+        }
         val ticker = TextView(this).apply {
             text = tickerText; textSize = 14f; setTextColor(0xFF164D49.toInt())
-            setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
-            marqueeRepeatLimit = -1; isSelected = true; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0); background = shape(0xFFE2F1ED.toInt(), 12)
+            setSingleLine(true); gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(12), 0)
         }
         tickerView = ticker
-        val tlp = params(-1, dp(42)); tlp.topMargin = dp(12); page.addView(ticker, tlp)
+        tickerFrame.addView(ticker, FrameLayout.LayoutParams(-2, -1, Gravity.CENTER_VERTICAL))
+        val tlp = params(-1, dp(42)); tlp.topMargin = dp(12); page.addView(tickerFrame, tlp)
+        tickerFrame.post { startTickerAnimation(tickerFrame, ticker) }
 
         val bannerTitle = label(if (french) "Actualités" else "آخر المستجدات", 16f, 0xFF24344B.toInt(), true)
         val btlp = params(); btlp.topMargin = dp(18); page.addView(bannerTitle, btlp)
@@ -200,7 +208,7 @@ class MainActivity : Activity() {
                     val next = strip.scrollX + 2
                     if (next >= max) strip.scrollTo(0, 0) else strip.scrollTo(next, 0)
                 }
-                handler.postDelayed(this, 24L)
+                handler.postDelayed(this, (110 - tickerSpeed).coerceAtLeast(20).toLong())
             }
         }
     }
@@ -303,7 +311,7 @@ class MainActivity : Activity() {
             .setPositiveButton("حفظ") { _, _ ->
                 tickerText = input.text.toString()
                 prefs.edit().putString("ticker", tickerText).apply()
-                tickerView?.text = tickerText
+                tickerView?.text = tickerText\n                tickerView?.let { tv -> (tv.parent as? FrameLayout)?.let { startTickerAnimation(it, tv) } }
             }.setNegativeButton("إلغاء", null).show()
     }
 
