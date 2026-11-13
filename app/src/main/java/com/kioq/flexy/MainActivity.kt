@@ -298,11 +298,11 @@ class MainActivity : Activity() {
             "معلومات الحساب" to { showMessage("ملف الحساب — سيتم ربط بيانات العميل عند تفعيل تسجيل الدخول") },
             "زبائني" to { showMessage("قائمة الزبائن ستظهر بعد ربط قاعدة البيانات ولوحة الإدارة") },
             "المنصات" to { showHome() },
-            "تعريف عن المحل" to { showInfo() },
             "التنبيهات" to { showMessage("لا توجد تنبيهات جديدة") },
             "التنزيلات والتحديثات" to { showMessage("نسخة التطبيق الحالية 1.0.0") },
             "الإعدادات" to { showAdminPanel() },
-            "اتصل بنا" to { showMessage("KIOQ.STORE") }
+            "وسائل الاتصال" to { showContacts() },
+            "اتصل بنا" to { showContacts() }
         )
         items.forEach { (name, action) ->
             val item = button("  $name", { closeDrawer(frame); action() })
@@ -311,7 +311,7 @@ class MainActivity : Activity() {
         }
         panel.addView(Space(this), LinearLayout.LayoutParams(1, 0, 1f))
         panel.addView(button("إغلاق القائمة", { closeDrawer(frame) }))
-        frame.addView(panel, FrameLayout.LayoutParams(dp(300), -1, Gravity.END))
+        frame.addView(panel, FrameLayout.LayoutParams(dp(300), -1, Gravity.RIGHT))
         drawer = panel
         panel.tag = shade
     }
@@ -330,17 +330,80 @@ class MainActivity : Activity() {
     }
 
     private fun showAdminPanel() {
-        val options = arrayOf("تعديل الشريط الكتابي", "سرعة حركة الشريط", "إدارة صور البانر", "إدارة ظهور المنصات", "قائمة الزبائن")
+        if (!isAdmin) { showMessage("هذه الخاصية متاحة للإدارة فقط"); return }
+        val options = arrayOf("الشريط الكتابي والسرعة", "صور البانر", "تعديل الأرصدة", "إدارة ظهور المنصات", "قائمة الزبائن")
         AlertDialog.Builder(this).setTitle("إعدادات الإدارة")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> editTicker()
-                    1 -> editSpeed()
-                    2 -> editImages()
+                    0 -> editTickerAndSpeed()
+                    1 -> editImages()
+                    2 -> editBalances()
                     3 -> showMessage("إعدادات إظهار وإخفاء المنصات ستربط بصلاحيات الإدارة وقاعدة البيانات.")
                     4 -> showMessage("قائمة الزبائن تتطلب ربط قاعدة البيانات وتفعيل حساب الإدارة.")
                 }
             }.show()
+    }
+
+
+    private fun showContacts() {
+        AlertDialog.Builder(this).setTitle("وسائل الاتصال")
+            .setItems(arrayOf("اتصال موبيليس 0699761222", "اتصال أوريدو 0555552711", "واتساب موبيليس", "واتساب أوريدو", "البريد الإلكتروني kioq.store@gmail.com")) { _, which ->
+                when (which) {
+                    0 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0699761222")))
+                    1 -> startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0555552711")))
+                    2 -> openWhatsApp("0699761222")
+                    3 -> openWhatsApp("0555552711")
+                    4 -> startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:kioq.store@gmail.com")))
+                }
+            }.setNegativeButton("إغلاق", null).show()
+    }
+
+    private fun openWhatsApp(number: String) {
+        val international = "213" + number.removePrefix("0")
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$international"))) }
+        catch (_: Exception) { showMessage("تعذر فتح واتساب") }
+    }
+
+    private fun editTickerAndSpeed() {
+        val input = EditText(this).apply { setText(tickerText); hint = "اكتب النص المتحرك" }
+        val seek = SeekBar(this).apply { max = 90; progress = tickerSpeed }
+        val wrap = column().apply {
+            setPadding(dp(16), dp(8), dp(16), dp(4))
+            addView(label("النص", 13f, 0xFF445566.toInt(), true))
+            addView(input, params(-1, dp(52)))
+            addView(label("السرعة", 13f, 0xFF445566.toInt(), true))
+            addView(seek)
+        }
+        AlertDialog.Builder(this).setTitle("الشريط الكتابي والسرعة").setView(wrap)
+            .setPositiveButton("حفظ") { _, _ ->
+                tickerText = input.text.toString()
+                tickerSpeed = seek.progress.coerceIn(10, 90)
+                prefs.edit().putString("ticker", tickerText).putInt("speed", tickerSpeed).apply()
+                tickerView?.text = tickerText
+                tickerView?.let { tv -> (tv.parent as? FrameLayout)?.let { startTickerAnimation(it, tv) } }
+                startBannerScroll()
+            }.setNegativeButton("إلغاء", null).show()
+    }
+
+    private fun editBalances() {
+        val wrap = column().apply { setPadding(dp(14), dp(8), dp(14), dp(4)) }
+        val fields = platforms.map { p ->
+            val field = EditText(this).apply {
+                hint = "رصيد ${p.name} بالدينار"
+                setText(prefs.getString("balance_${p.name}", ""))
+                inputType = 8194
+            }
+            wrap.addView(label(p.name, 13f, 0xFF176B63.toInt(), true))
+            wrap.addView(field, params(-1, dp(48)))
+            p.name to field
+        }
+        AlertDialog.Builder(this).setTitle("تحديث الأرصدة").setMessage("أدخل آخر الأرصدة المؤكدة يدوياً. لا يوجد ربط مباشر مع المنصات حالياً.")
+            .setView(wrap).setPositiveButton("حفظ") { _, _ ->
+                val editor = prefs.edit()
+                fields.forEach { (name, field) -> editor.putString("balance_$name", field.text.toString().trim().ifBlank { "غير مسجل" }) }
+                editor.apply()
+                showHome()
+            }.setNegativeButton("إلغاء", null).show()
     }
 
     private fun editTicker() {
